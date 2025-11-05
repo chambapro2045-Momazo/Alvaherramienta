@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="{{ lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ get_text(lang, 'title') }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}"> 
+</head>
+<body>
+    
+    <aside class="sidebar">
+        <div class="lang-selector">
+            <button id="btn-lang-es" class="lang-button {% if lang == 'es' %}active{% endif %}" data-lang="es">Español</button>
+            <button id="btn-lang-en" class="lang-button {% if lang == 'en' %}active{% endif %}" data-lang="en">English</button>
+        </div>
+
+        <h2>{{ get_text(lang, 'control_area') }}</h2>
+        
+        <h3>1. {{ get_text(lang, 'uploader_label') }}</h3>
+        <div class="file-uploader-container">
+            <label class="drag-drop-label" for="file-uploader">
+                <div class="drag-drop-area">
+                    <p>Drag and drop files here</p>
+                    <span>Limit 200MB per file • XLSX</span>
+                    <span class="btn-browse">Browse files</span>
+                </div>
+            </label>
+            <input type="file" id="file-uploader" accept=".xlsx" multiple style="display: none;">
+            <div id="file-upload-list"></div>
+        </div>
+        
+        <h3>2. {{ get_text(lang, 'add_filter_header') }}</h3>
+        <select id="select-columna">
+            <option value="">{{ get_text(lang, 'column_select') }}</option>
+        </select>
+        <input type="text" id="input-valor" placeholder="{{ get_text(lang, 'search_text') }}">
+        <button id="btn-add-filter">{{ get_text(lang, 'add_filter_button') }}</button>
+        
+        <h3>3. {{ get_text(lang, 'visible_columns_header') }}</h3>
+        <div class="column-toggle-buttons">
+            <button id="btn-check-all-cols" class="btn-small-link">{{ get_text(lang, 'check_all_button') }}</button>
+            <button id="btn-uncheck-all-cols" class="btn-small-link">{{ get_text(lang, 'uncheck_all_button') }}</button>
+        </div>
+        <div id="column-selector-wrapper">
+          <p>{{ get_text(lang, 'info_upload') }}</p> 
+        </div>
+    </aside>
+
+    <main class="content">
+
+        <div class="content-header-sutil">
+            <h1>{{ get_text(lang, 'title') }}</h1>
+            <span>{{ get_text(lang, 'subtitle') }}</span>
+        </div>
+        
+        <div class="resumen-busqueda" id="resumen-busqueda-kpis">
+            <div class="resumen-card-item">
+                <span class="card-titulo">{{ get_text(lang, 'summary_total_invoices') }}</span>
+                <span class="card-valor" id="resumen-total-facturas">0</span>
+            </div>
+            <div class="resumen-card-item">
+                <span class="card-titulo">{{ get_text(lang, 'summary_total_amount') }}</span>
+                <span class="card-valor" id="resumen-monto-total">$0.00</span>
+            </div>
+            <div class="resumen-card-item">
+                <span class="card-titulo">{{ get_text(lang, 'summary_avg_amount') }}</span>
+                <span class="card-valor" id="resumen-monto-promedio">$0.00</span>
+            </div>
+        </div>
+
+        <div class="view-selector-container">
+            <div class="view-selector-sub-container">
+                <span class="view-selector-label">{{ get_text(lang, 'view_type_header') }}:</span>
+                <div class="view-selector-buttons">
+                    <button id="btn-view-detailed" class="view-button active">{{ get_text(lang, 'view_type_detailed') }}</button>
+                    <button id="btn-view-grouped" class="view-button">{{ get_text(lang, 'view_type_grouped') }}</button>
+                </div>
+            </div>
+            <div class="group-by-wrapper" id="group-by-controls-wrapper" style="display: none;">
+                <label for="select-columna-agrupar">{{ get_text(lang, 'group_by_select') }}</label>
+                <select id="select-columna-agrupar">
+                    <option value="">{{ get_text(lang, 'group_by_placeholder') }}</option>
+                    </select>
+            </div>
+        </div>
+
+        <div id="view-container-detailed" class="content-card" style="display: flex; flex-direction: column;">
+            
+            <div class="table-controls">
+                <div id="active-filters-list" style="flex-grow: 1; display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                    </div>
+                <button id="btn-clear-filters" class="btn-rojo-secundario" style="display: none;">{{ get_text(lang, 'clear_all_button') }}</button>
+                
+                <div class="search-wrapper">
+                    <input type="text" id="input-search-table" placeholder="{{ get_text(lang, 'search_text') }}...">
+                    <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                </div>
+            </div>
+            
+            <div style="position: relative; flex-grow: 1; min-height: 0;">
+                <div class="table-actions">
+                    <button id="btn-fullscreen" class="icon-button" title="Pantalla Completa">
+                       <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" /></svg>
+                    </button>
+                    <button id="btn-download-excel" class="icon-button" title="{{ get_text(lang, 'download_button').replace('JSON', 'Excel') }}">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" /></svg>
+                    </button>
+                </div>
+                
+                <div id="results-table" class="table-container-flotante">
+                    </div>
+            </div>
+        </div>
+
+        <div id="view-container-grouped" class="content-card" style="display: none; flex-direction: column;">
+
+            <div class="table-controls">
+                <div id="active-filters-list-grouped" style="flex-grow: 1; display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                    </div>
+                <button id="btn-clear-filters-grouped" class="btn-rojo-secundario" style="display: none;">{{ get_text(lang, 'clear_all_button') }}</button>
+            </div>
+
+            <div style="position: relative; flex-grow: 1; min-height: 0;">
+                <div class="table-actions">
+                    <button id="btn-fullscreen-grouped" class="icon-button" title="Pantalla Completa">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" /></svg>
+                    </button>
+                    <button id="btn-download-excel-grouped" class="icon-button" title="{{ get_text(lang, 'download_button').replace('JSON', 'Excel') }}">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" /></svg>
+                    </button>
+                </div>
+
+                <div id="results-table-grouped" class="table-container-flotante">
+                    </div>
+            </div>
+        </div>
+
+    </main>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script> 
+</body>
+</html>

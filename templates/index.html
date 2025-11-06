@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <title>{{ get_text(lang, 'title') }}</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}"> 
+    <link href="https://unpkg.com/tabulator-tables@5.6.1/dist/css/tabulator_modern.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
     
@@ -43,7 +44,12 @@
         <div id="column-selector-wrapper">
           <p>{{ get_text(lang, 'info_upload') }}</p> 
         </div>
-    </aside>
+
+        <h3 style="margin-top: 1.5rem;">4. {{ get_text(lang, 'manage_lists_header') }}</h3>
+        <button id="btn-manage-lists" class="btn-small-link" style="width: 100%;">
+            {{ get_text(lang, 'manage_lists_button') }}
+        </button>
+        </aside>
 
     <main class="content">
 
@@ -138,6 +144,11 @@
 
     </main>
 
+    <script>
+        var SESSION_DATA = {{ session_data | tojson }};
+    </script>
+
+    <script type="text/javascript" src="https://unpkg.com/tabulator-tables@5.6.1/dist/js/tabulator.min.js"></script>
     <script src="{{ url_for('static', filename='script.js') }}"></script> 
 </body>
 </html>

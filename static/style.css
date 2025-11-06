@@ -406,23 +406,41 @@ button {
 
 /* --- 6. La Tabla (¡SOLUCIÓN SCROLL!) --- */
 
-/* 6.1. Contenedor Flotante */
-.table-container-flotante {
-    flex-grow: 0;
-    overflow: auto; 
+/* * ¡REGLA ELIMINADA! 
+ * La regla '.table-container-flotante' ha sido eliminada por completo.
+ * Tabulator crea su propio contenedor con su propia altura y scroll.
+ * Forzar un 'overflow' y 'height' en un 'div' padre (como
+ * 'table-container-flotante' lo hacía) rompe el layout de Tabulator.
+ * La altura ahora se define en la configuración de Tabulator en 'script.js'.
+ */
+/* Mensaje "Cargue un archivo..." */
+
+/* * ¡NUEVO! Estilos para Tabulator
+ * Esto asegura que la tabla se integre con tu diseño.
+ */
+#results-table {
+    /* * Hereda el 'border' y 'radius' de tu diseño original.
+     * Usamos 'tabulator_modern.min.css', que ya tiene bordes, 
+     * pero podemos forzarlos si es necesario.
+     */
     border: 1px solid var(--color-borde);
     border-radius: var(--radio-esquinas);
     box-shadow: var(--sombra-ventana);
     background-color: var(--color-blanco);
-    min-width: 0; 
-    height: 65vh; /* <-- ¡SOLUCIÓN! Altura fija, puedes cambiar 65vh por 600px, etc. */
 }
 
-/* Mensaje "Cargue un archivo..." */
-.table-container-flotante p { padding: 3rem; text-align: center; color: var(--color-texto-secundario); font-size: 1.1rem; }
+/* * Mensaje "Cargue un archivo..." 
+ * Ahora se lo pasamos a Tabulator como 'placeholder'.
+ */
 
 /* 6.2. Estilos de Tabla (Moderna, gris) */
-table {
+/* * NOTA: La mayoría de los estilos de 'table', 'th', 'td' 
+ * ya no son necesarios, ya que Tabulator los gestiona.
+ * Los dejamos por si la vista 'agrupada' (que usa HTML)
+ * todavía los necesita.
+ */
+
+ table {
     border-collapse: collapse;
     border-spacing: 0;
 }

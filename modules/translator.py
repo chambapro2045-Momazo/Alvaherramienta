@@ -43,7 +43,9 @@ LANGUAGES = {
         "group_avg_amount": "Monto Promedio",
         "group_min_amount": "Monto Mínimo",
         "group_max_amount": "Monto Máximo",
-        "group_invoice_count": "Conteo de Facturas"
+        "group_invoice_count": "Conteo de Facturas",
+        "manage_lists_header": "4. Administrar Listas",
+        "manage_lists_button": "Editar Listas de Autocompletado"
     },
     "en": {
         "title": "Dynamic Invoice Search",
@@ -86,7 +88,9 @@ LANGUAGES = {
         "group_avg_amount": "Average Amount",
         "group_min_amount": "Minimum Amount",
         "group_max_amount": "Maximum Amount",
-        "group_invoice_count": "Invoice Count"
+        "group_invoice_count": "Invoice Count",
+        "manage_lists_header": "4. Manage Lists",
+        "manage_lists_button": "Edit Autocomplete Lists"
     }
 }
 

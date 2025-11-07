@@ -53,7 +53,7 @@ LANGUAGES = {
         "lang_selector": "Language",
         "control_area": "Control Panel",
         "uploader_label": "Upload your invoice file",
-        "add_filter_header": "Add Filter",
+        "add_fsilter_header": "Add Filter",
         "column_select": "Select a column:",
         "search_text": "Text to search (partial match)",
         "add_filter_button": "Add Filter",

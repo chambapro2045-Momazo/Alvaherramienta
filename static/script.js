@@ -30,7 +30,7 @@ let groupedTabulatorInstance = null;
 
 const COLUMNAS_AGRUPABLES = [
     "Vendor Name", "Status", "Assignee", 
-    "Operating Unit Name", "Pay Status", "Document Type", "_row_status"
+    "Operating Unit Name", "Pay Status", "Document Type", "_row_status", "Pay Group"
 ];
 
 // ---

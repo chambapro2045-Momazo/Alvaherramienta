@@ -1,10 +1,10 @@
-# app.py (Versión 6.3 - ¡Corrección de Recarga de Autocompletado!)
+# app.py (Versión 6.6 - ¡Con Pila de Deshacer 'Undo'!)
 
 import os
 import pandas as pd
 import uuid
 import io 
-import json # ¡NUEVO IMPORTE!
+import json 
 from flask import Flask, request, jsonify, render_template, send_file, session, redirect, url_for
 from flask_cors import CORS
 from flask_session import Session 
@@ -13,6 +13,12 @@ from flask_session import Session
 from modules.loader import cargar_datos
 from modules.filters import aplicar_filtros_dinamicos
 from modules.translator import get_text, LANGUAGES
+from modules.json_manager import cargar_json, guardar_json 
+
+# Ruta al archivo de autocompletado
+USER_LISTS_FILE = 'user_autocomplete.json'
+# Límite de la Pila de Deshacer (Undo Stack)
+UNDO_STACK_LIMIT = 15
 
 # --- (Funciones _find_monto_column, _check_file_id sin cambios) ---
 def _find_monto_column(df):
@@ -33,63 +39,32 @@ def _check_file_id(request_file_id):
         session.clear()
         raise Exception("El file_id no coincide con la sesión. Por favor, recargue el archivo.")
 
-# --- ¡NUEVA FUNCIÓN DE AYUDA! ---
+# --- (Funciones cargar_listas_usuario, get_autocomplete_options sin cambios) ---
 def cargar_listas_usuario():
     """Carga las listas personalizadas desde user_autocomplete.json"""
-    try:
-        # Asegúrate de que el archivo exista, si no, créalo vacío
-        if not os.path.exists('user_autocomplete.json'):
-            with open('user_autocomplete.json', 'w') as f:
-                json.dump({}, f)
-            return {}
-            
-        with open('user_autocomplete.json', 'r') as f:
-            data = json.load(f)
-            return data if isinstance(data, dict) else {}
-    except Exception as e:
-        print(f"Error cargando user_autocomplete.json: {e}")
-        return {} # Si está corrupto, devuelve un dict vacío
+    return cargar_json(USER_LISTS_FILE)
 
-# --- ¡NUEVA FUNCIÓN DE AYUDA! ---
 def get_autocomplete_options(df: pd.DataFrame) -> dict:
     """
     Toma un DataFrame y genera las opciones de autocompletado
     fusionándolas con las listas guardadas por el usuario.
     """
-    
-    # 1. Carga las listas guardadas por el usuario
     listas_de_usuario = cargar_listas_usuario()
-    # 'listas_de_usuario' es ej: {"Status": ["Archivado", "Revisado"]}
-
-    # 2. Prepara el diccionario final
     autocomplete_options = {}
-
-    # 3. Define las columnas que queremos escanear
     columnas_para_autocompletar = [
         "Vendor Name", "Status", "Assignee", 
         "Operating Unit Name", "Pay Status", "Document Type", "_row_status"
     ]
-
     for col in columnas_para_autocompletar:
-        
-        # Combina listas de usuario y de Excel
-        # Usamos un 'set' para evitar duplicados
         opciones_combinadas = set()
-
-        # Añade las listas del usuario (si existen)
         if col in listas_de_usuario:
             opciones_combinadas.update(listas_de_usuario[col])
-
-        # Escanea el Excel y añade esas opciones
         if col in df.columns:
             valores_unicos_excel = df[col].astype(str).unique()
             opciones_limpias_excel = [val for val in valores_unicos_excel if val and pd.notna(val) and val.strip() != ""]
             opciones_combinadas.update(opciones_limpias_excel)
-        
-        # Convierte el set final a una lista ordenada
         if opciones_combinadas:
              autocomplete_options[col] = sorted(list(opciones_combinadas))
-             
     return autocomplete_options
 
 # --- (Función _get_df_from_session sin cambios) ---
@@ -99,8 +74,6 @@ def _get_df_from_session(key='df_staging'):
     if not data_list_of_dicts:
         session.clear() 
         raise Exception(f"No se encontraron datos en la sesión para '{key}'. La sesión se ha limpiado, por favor recargue el archivo.")
-    
-    # ¡CORRECCIÓN! pd.DataFrame.from_records() es el constructor correcto
     return pd.DataFrame.from_records(data_list_of_dicts)
 
 
@@ -125,39 +98,25 @@ def inject_translator():
     return dict(get_text=get_text, lang=lang)
 
 
-# --- ¡RUTA PRINCIPAL '/' MODIFICADA! ---
+# --- (Ruta '/' sin cambios) ---
 @app.route('/')
 def home():
     """
     Renderiza la página principal.
-    ¡AHORA también carga y pasa las opciones de autocompletado
-    si ya existe una sesión!
+    Carga opciones de autocompletado si ya existe una sesión.
     """
-    
-    # Prepara los datos base para inyectar en el HTML
     session_data = {
         "file_id": session.get('file_id'),
         "columnas": [],
-        "autocomplete_options": {} # ¡NUEVO!
+        "autocomplete_options": {} 
     }
-    
-    # Intenta obtener el DF de la sesión
     df_staging_data = session.get('df_staging')
     
     if df_staging_data and isinstance(df_staging_data, list) and len(df_staging_data) > 0:
-        # Si hay datos, obtén las columnas
         session_data["columnas"] = list(df_staging_data[0].keys())
-        
-        # --- ¡NUEVA LÓGICA DE RECARGA! ---
-        # 1. Reconvierte los datos de sesión a un DataFrame de Pandas
-        #    (solo para poder escanearlo)
         df_para_escanear = pd.DataFrame.from_records(df_staging_data)
-        
-        # 2. Llama a la misma función de ayuda que usa /api/upload
         session_data["autocomplete_options"] = get_autocomplete_options(df_para_escanear)
-        # --- FIN DE LA NUEVA LÓGICA ---
 
-    # Pasa estos datos (incluyendo las opciones) al template
     return render_template('index.html', session_data=session_data)
 
 
@@ -191,29 +150,34 @@ def upload_file():
         df = cargar_datos(file_path)
         if df.empty: raise Exception("File is empty or corrupt")
         
+        # Añadimos el ID único
+        df = df.reset_index().rename(columns={'index': '_row_id'})
+        
         session.clear()
         
         data_dict_list = df.to_dict('records')
         
-        session['df_pristine'] = data_dict_list
-        session['df_original'] = data_dict_list
-        session['df_staging'] = data_dict_list   
+        # --- ¡NUEVA LÓGICA DE 2 VERSIONES + HISTORIAL! ---
+        # 1. El original, virgen. Nunca se toca.
+        session['df_pristine'] = data_dict_list 
+        # 2. El "borrador" de trabajo.
+        session['df_staging'] = data_dict_list  
+        # 3. La Pila de Deshacer (Undo Stack), inicializada vacía.
+        session['history'] = []
+        # --- FIN DE LA LÓGICA ---
+        
         session['file_id'] = file_id
 
         if os.path.exists(file_path):
             os.remove(file_path)
 
         todas_las_columnas = [col for col in df.columns]
-        
-        # --- ¡LÓGICA DE AUTOCOMPLETADO! ---
-        # Llama a la función de ayuda para obtener las listas
         autocomplete_options = get_autocomplete_options(df)
-        # --- FIN DE LA LÓGICA ---
 
         return jsonify({ 
             "file_id": file_id, 
             "columnas": todas_las_columnas,
-            "autocomplete_options": autocomplete_options # Envía la lista fusionada
+            "autocomplete_options": autocomplete_options 
         })
         
     except Exception as e:
@@ -222,7 +186,7 @@ def upload_file():
             os.remove(file_path)
         return jsonify({"error": str(e)}), 500
 
-# --- ¡NUEVA API DE GUARDADO DE LISTAS! ---
+# --- (API de Guardado de Listas sin cambios) ---
 @app.route('/api/save_autocomplete_lists', methods=['POST'])
 def save_autocomplete_lists():
     """
@@ -232,15 +196,199 @@ def save_autocomplete_lists():
         nuevas_listas = request.json
         if not isinstance(nuevas_listas, dict):
             return jsonify({"error": "El formato debe ser un JSON object"}), 400
+        
+        success = guardar_json(USER_LISTS_FILE, nuevas_listas)
             
-        with open('user_autocomplete.json', 'w') as f:
-            json.dump(nuevas_listas, f, indent=4)
-            
-        return jsonify({"status": "success", "message": "Listas guardadas."})
+        if success:
+            return jsonify({"status": "success", "message": "Listas guardadas."})
+        else:
+            return jsonify({"error": "Error interno al guardar el archivo."}), 500
         
     except Exception as e:
         print(f"Error en /api/save_autocomplete_lists: {e}")
         return jsonify({"error": str(e)}), 500
+
+# ---
+# --- ¡APIS DE EDICIÓN MODIFICADAS! ---
+# ---
+@app.route('/api/update_cell', methods=['POST'])
+def update_cell():
+    """
+    Actualiza una celda en 'df_staging' y guarda el
+    cambio anterior en la pila de deshacer 'history'.
+    """
+    try:
+        # 1. Obtener los datos del frontend
+        data = request.json
+        file_id = data.get('file_id')
+        row_id = data.get('row_id')      
+        columna = data.get('columna')   
+        nuevo_valor = data.get('valor') 
+        
+        # 2. Validar
+        _check_file_id(file_id)
+        if row_id is None or columna is None:
+            return jsonify({"error": "Faltan row_id o columna"}), 400
+
+        # 3. Obtener el "borrador" (staging) y el "historial"
+        datos_staging_lista = session.get('df_staging')
+        history_stack = session.get('history', [])
+        
+        if not datos_staging_lista:
+            raise Exception("No se encontró df_staging en la sesión.")
+
+        # 4. Encontrar la fila, guardar el cambio y el historial
+        fila_modificada = False
+        for fila in datos_staging_lista:
+            # Comparamos el '_row_id'
+            if int(fila.get('_row_id')) == int(row_id):
+                
+                # --- ¡NUEVA LÓGICA DE HISTORIAL! ---
+                # 1. Obtener el valor ANTIGUO
+                old_val = fila.get(columna)
+                
+                # 2. Crear el "objeto de cambio"
+                change_obj = {
+                    'row_id': row_id,
+                    'columna': columna,
+                    'old_val': old_val,
+                    'new_val': nuevo_valor
+                }
+                
+                # 3. Añadir el cambio al historial (la pila)
+                history_stack.append(change_obj)
+                
+                # 4. Limitar el tamaño de la pila (como sugeriste)
+                if len(history_stack) > UNDO_STACK_LIMIT:
+                    history_stack.pop(0) # Elimina el cambio más antiguo
+                # --- FIN DE LA LÓGICA ---
+
+                # 5. Aplicar el nuevo valor a la fila
+                fila[columna] = nuevo_valor
+                fila_modificada = True
+                break 
+        
+        if not fila_modificada:
+            return jsonify({"error": f"No se encontró la fila con _row_id {row_id}"}), 404
+            
+        # 6. Guardar todo de vuelta en la sesión
+        session['df_staging'] = datos_staging_lista
+        session['history'] = history_stack
+        
+        # 7. Responder con éxito y el tamaño del historial
+        return jsonify({
+            "status": "success", 
+            "message": f"Fila {row_id} actualizada.",
+            "history_count": len(history_stack) # Informa al frontend cuántos "undos" hay
+        })
+
+    except Exception as e:
+        print(f"Error en /api/update_cell: {e}") 
+        return jsonify({"error": str(e)}), 500
+
+# --- ¡NUEVA API DE DESHACER (UNDO)! ---
+@app.route('/api/undo_change', methods=['POST'])
+def undo_change():
+    """
+    Deshace el último cambio de 'update_cell'.
+    Toma el último cambio de 'history', lo revierte
+    en 'df_staging' y lo elimina de la pila.
+    """
+    try:
+        # 1. Validar el file_id
+        data = request.json
+        file_id = data.get('file_id')
+        _check_file_id(file_id)
+
+        # 2. Obtener la pila de historial
+        history_stack = session.get('history', [])
+        
+        # 3. Comprobar si hay algo que deshacer
+        if not history_stack:
+            return jsonify({"error": "No hay nada que deshacer."}), 404
+            
+        # 4. Obtener el último cambio (el más reciente)
+        last_change = history_stack.pop() # .pop() elimina y devuelve el último item
+        
+        # 5. Extraer los datos del "objeto de cambio"
+        row_id_to_revert = last_change.get('row_id')
+        col_to_revert = last_change.get('columna')
+        value_to_restore = last_change.get('old_val') # El valor al que queremos volver
+        
+        # 6. Obtener el "borrador" (staging)
+        datos_staging_lista = session.get('df_staging')
+        if not datos_staging_lista:
+             raise Exception("No se encontró df_staging en la sesión.")
+        
+        # 7. Buscar la fila y revertir el cambio
+        fila_revertida = False
+        for fila in datos_staging_lista:
+            if int(fila.get('_row_id')) == int(row_id_to_revert):
+                # Encontramos la fila. Restauramos el valor antiguo.
+                fila[col_to_revert] = value_to_restore
+                fila_revertida = True
+                break
+        
+        if not fila_revertida:
+            # Esto no debería pasar si la lógica es correcta
+            raise Exception(f"Error de consistencia: no se encontró la fila {row_id_to_revert} para deshacer.")
+        
+        # 8. Guardar la pila (sin el cambio) y los datos (revertidos)
+        session['history'] = history_stack
+        session['df_staging'] = datos_staging_lista
+        
+        # 9. Responder al frontend con los datos actualizados
+        return jsonify({
+            "status": "success",
+            "message": f"Cambio en Fila {row_id_to_revert} deshecho.",
+            "data": datos_staging_lista, # Devuelve *toda* la tabla actualizada
+            "history_count": len(history_stack) # Informa cuántos "undos" quedan
+        })
+
+    except Exception as e:
+        print(f"Error en /api/undo_change: {e}") 
+        return jsonify({"error": str(e)}), 500
+
+# --- ¡API DE REVERTIR MODIFICADA! (Ahora es la "Opción Nuclear") ---
+@app.route('/api/revert_changes', methods=['POST'])
+def revert_changes():
+    """
+    Restaura el "borrador" (df_staging) a la versión "prístina",
+    copiando 'df_pristine' encima de 'df_staging' y
+    borrando todo el historial de deshacer.
+    """
+    try:
+        # 1. Validar el file_id
+        data = request.json
+        file_id = data.get('file_id')
+        _check_file_id(file_id)
+
+        # 2. Obtener la copia "prístina" (df_pristine)
+        datos_pristine_lista = session.get('df_pristine')
+        if not datos_pristine_lista:
+             raise Exception("No se encontró df_pristine en la sesión.")
+             
+        # 3. Sobrescribir el "borrador" (df_staging) con la copia prístina
+        # Usamos list() para asegurar que sea una COPIA
+        session['df_staging'] = list(datos_pristine_lista)
+        
+        # 4. Limpiar la pila de deshacer
+        session['history'] = []
+        
+        # 5. Responder al frontend con los datos restaurados
+        return jsonify({
+            "status": "success", 
+            "message": "Cambios revertidos al original.",
+            "data": datos_pristine_lista, # Devuelve los datos originales
+            "history_count": 0 # Ya no hay "undos"
+        })
+        
+    except Exception as e:
+        print(f"Error en /api/revert_changes: {e}") 
+        return jsonify({"error": str(e)}), 500
+# ---
+# --- FIN DE LAS APIS DE EDICIÓN ---
+# ---
 
 # --- (El resto de las APIs: /api/filter, /api/download_excel, /api/group_by, 
 # --- /api/download_excel_grouped, y 'if __name__ == ...' 
@@ -253,6 +401,7 @@ def filter_data():
         filtros_recibidos = data.get('filtros_activos')
 
         _check_file_id(file_id)
+        # Usa 'df_staging' (que tiene los cambios)
         df_staging = _get_df_from_session('df_staging')
 
         resultado_df = aplicar_filtros_dinamicos(df_staging, filtros_recibidos)
@@ -296,6 +445,7 @@ def download_excel():
         columnas_visibles = data.get('columnas_visibles') 
 
         _check_file_id(file_id)
+        # Usa 'df_staging' (con los cambios)
         df_staging = _get_df_from_session('df_staging')
 
         resultado_df = aplicar_filtros_dinamicos(df_staging, filtros_recibidos)
@@ -305,6 +455,10 @@ def download_excel():
              columnas_existentes = [col for col in columnas_visibles if col in resultado_df.columns]
              if columnas_existentes:
                  df_a_exportar = resultado_df[columnas_existentes]
+
+        # Ocultar el _row_id en la descarga
+        if '_row_id' in df_a_exportar.columns:
+            df_a_exportar = df_a_exportar.drop(columns=['_row_id'])
 
         output_buffer = io.BytesIO()
         with pd.ExcelWriter(output_buffer, engine='xlsxwriter') as writer:
@@ -330,6 +484,7 @@ def group_data():
         columna_agrupar = data.get('columna_agrupar') 
 
         _check_file_id(file_id)
+        # Usa 'df_staging' (con los cambios)
         df_staging = _get_df_from_session('df_staging')
         
         if not columna_agrupar: return jsonify({"error": "Missing 'columna_agrupar'"}), 400
@@ -339,7 +494,10 @@ def group_data():
         if resultado_df.empty:
             return jsonify({ "data": [] }) 
 
-        if 'Total' not in resultado_df.columns:
+        monto_col_name = _find_monto_column(resultado_df)
+        if monto_col_name:
+            resultado_df = resultado_df.rename(columns={monto_col_name: 'Total'})
+        elif 'Total' not in resultado_df.columns:
             resultado_df['Total'] = 0
         
         resultado_df['Total'] = pd.to_numeric(resultado_df['Total'], errors='coerce')
@@ -373,6 +531,7 @@ def download_excel_grouped():
         columna_agrupar = data.get('columna_agrupar')
 
         _check_file_id(file_id)
+        # Usa 'df_staging' (con los cambios)
         df_staging = _get_df_from_session('df_staging')
 
         if not columna_agrupar: return jsonify({"error": "Missing 'columna_agrupar'"}), 400
@@ -382,8 +541,12 @@ def download_excel_grouped():
         if resultado_df.empty:
             return jsonify({"error": "No data found for these filters"}), 404
 
-        if 'Total' not in resultado_df.columns:
+        monto_col_name = _find_monto_column(resultado_df)
+        if monto_col_name:
+            resultado_df = resultado_df.rename(columns={monto_col_name: 'Total'})
+        elif 'Total' not in resultado_df.columns:
             resultado_df['Total'] = 0
+                
         resultado_df['Total'] = pd.to_numeric(resultado_df['Total'], errors='coerce').fillna(0)
 
         agg_operations = {

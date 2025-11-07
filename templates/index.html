@@ -49,7 +49,7 @@
         <button id="btn-manage-lists" class="btn-small-link" style="width: 100%;">
             {{ get_text(lang, 'manage_lists_button') }}
         </button>
-        </aside>
+    </aside>
 
     <main class="content">
 
@@ -94,6 +94,14 @@
             <div class="table-controls">
                 <div id="active-filters-list" style="flex-grow: 1; display: flex; flex-wrap: wrap; gap: 0.5rem;">
                     </div>
+                
+                <button id="btn-undo-change" class="btn-rojo-secundario" style="display: none;" title="Deshace la última edición de celda">
+                    Deshacer
+                </button>
+                
+                <button id="btn-revert-original" class="btn-rojo-secundario" style="display: none; background-color: #a00; color: white;" title="Revierte TODOS los cambios al archivo original">
+                    Revertir Original
+                </button>
                 <button id="btn-clear-filters" class="btn-rojo-secundario" style="display: none;">{{ get_text(lang, 'clear_all_button') }}</button>
                 
                 <div class="search-wrapper">
@@ -103,7 +111,6 @@
                     </svg>
                 </div>
             </div>
-            
             <div style="position: relative; flex-grow: 1; min-height: 0;">
                 <div class="table-actions">
                     <button id="btn-fullscreen" class="icon-button" title="Pantalla Completa">
@@ -145,6 +152,7 @@
     </main>
 
     <script>
+        // Inyecta los datos de la sesión (sin cambios)
         var SESSION_DATA = {{ session_data | tojson }};
     </script>
 

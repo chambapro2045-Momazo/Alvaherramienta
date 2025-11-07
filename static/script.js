@@ -1,8 +1,10 @@
-// script.js (Versión 7.7 - Con Gestión de Listas de Autocompletado)
+// script.js (Versión 7.10 - ¡Con Pila de Deshacer 'Undo'!)
 // NOTA:
-// 1. Añadido un listener para '#btn-manage-lists'.
-// 2. Añadida la nueva función 'handleManageLists' para
-//    editar, guardar y recargar las listas de autocompletado.
+// 1. Reemplazado 'btn-revert-changes' por 'btn-undo-change' (Deshacer)
+//    y 'btn-revert-original' (Opción Nuclear).
+// 2. 'cellEdited' ahora pasa el 'history_count' para gestionar el estado.
+// 3. Nuevas funciones: 'handleUndoChange', 'handleRevertToOriginal',
+//    y 'updateActionButtonsVisibility'.
 
 // --- Variable global para traducciones ---
 let i18n = {}; 
@@ -15,6 +17,9 @@ let tableData = [];
 let todasLasColumnas = [];
 let columnasVisibles = [];
 let currentView = 'detailed';
+// --- ¡NUEVA VARIABLE DE ESTADO! ---
+// Rastrea *cuántos* cambios hay en la pila de deshacer
+let undoHistoryCount = 0;
 
 // --- Variable para Autocompletado ---
 let autocompleteOptions = {};
@@ -32,7 +37,7 @@ const COLUMNAS_AGRUPABLES = [
 // SECCIÓN 1: MANEJO DE COLUMNAS (Sin Cambios)
 // ---
 function renderColumnSelector() {
-    // ... (Sin cambios desde v7.6) ...
+    // ... (Sin cambios desde v7.9) ...
     const wrapper = document.getElementById('column-selector-wrapper');
     if (!wrapper) return;
     wrapper.innerHTML = ''; 
@@ -40,7 +45,7 @@ function renderColumnSelector() {
         wrapper.innerHTML = `<p>${i18n['info_upload'] || 'Upload file'}</p>`; 
         return; 
     }
-    todasLasColumnas.forEach(columnName => {
+    todasLasColumnas.filter(col => col !== '_row_id').forEach(columnName => {
         const isChecked = columnasVisibles.includes(columnName);
         const itemHTML = `
             <div class="column-selector-item">
@@ -53,7 +58,7 @@ function renderColumnSelector() {
     });
 }
 function updateVisibleColumnsFromCheckboxes() {
-    // ... (Sin cambios desde v7.6) ...
+    // ... (Sin cambios desde v7.9) ...
     const checkboxes = document.querySelectorAll('#column-selector-wrapper input[type="checkbox"]');
     columnasVisibles = [];
     checkboxes.forEach(cb => {
@@ -61,6 +66,9 @@ function updateVisibleColumnsFromCheckboxes() {
             columnasVisibles.push(cb.value);
         }
     });
+    if (todasLasColumnas.includes('_row_id')) {
+        columnasVisibles.push('_row_id');
+    }
     renderTable();
 }
 function handleColumnVisibilityChange(event) {
@@ -68,13 +76,13 @@ function handleColumnVisibilityChange(event) {
     updateVisibleColumnsFromCheckboxes();
 }
 function handleCheckAllColumns() {
-    // ... (Sin cambios desde v7.6) ...
+    // ... (Sin cambios desde v7.9) ...
     const checkboxes = document.querySelectorAll('#column-selector-wrapper input[type="checkbox"]');
     checkboxes.forEach(cb => cb.checked = true);
     updateVisibleColumnsFromCheckboxes();
 }
 function handleUncheckAllColumns() {
-    // ... (Sin cambios desde v7.6) ...
+    // ... (Sin cambios desde v7.9) ...
     const checkboxes = document.querySelectorAll('#column-selector-wrapper input[type="checkbox"]');
     checkboxes.forEach(cb => cb.checked = false);
     updateVisibleColumnsFromCheckboxes();
@@ -83,7 +91,7 @@ function handleUncheckAllColumns() {
 // SECCIÓN 2: CONFIGURACIÓN INICIAL Y LISTENERS (¡MODIFICADO!)
 // ---
 async function loadTranslations() {
-    // ... (Sin cambios desde v7.6) ...
+    // ... (Sin cambios desde v7.9) ...
     try {
         const response = await fetch('/api/get_translations');
         if (!response.ok) throw new Error('Network response was not ok');
@@ -97,9 +105,10 @@ async function loadTranslations() {
 
 /**
  * @description Configura todos los event listeners de la página.
- * ¡MODIFICADO! Añadido listener para '#btn-manage-lists'.
+ * ¡MODIFICADO! Conectado a los nuevos botones 'undo' y 'revert'.
  */
 function setupEventListeners() {
+    // ... (Selectores de elementos sin cambios) ...
     const fileUploader = document.getElementById('file-uploader');
     const dragDropArea = document.querySelector('.drag-drop-label');
     const btnAdd = document.getElementById('btn-add-filter');
@@ -131,6 +140,11 @@ function setupEventListeners() {
     addSafeListener(document.getElementById('input-search-table'), 'keyup', handleSearchTable);
     addSafeListener(document.getElementById('active-filters-list'), 'click', handleRemoveFilter);
     
+    // --- ¡NUEVOS LISTENERS DE DESHACER/REVERTIR! ---
+    addSafeListener(document.getElementById('btn-undo-change'), 'click', handleUndoChange);
+    addSafeListener(document.getElementById('btn-revert-original'), 'click', handleRevertToOriginal);
+    // --- FIN DEL CAMBIO ---
+
     // Listeners Vista Agrupada
     addSafeListener(document.getElementById('btn-view-detailed'), 'click', () => toggleView('detailed'));
     addSafeListener(document.getElementById('btn-view-grouped'), 'click', () => toggleView('grouped'));
@@ -142,9 +156,8 @@ function setupEventListeners() {
     addSafeListener(document.getElementById('btn-download-excel-grouped'), 'click', handleDownloadExcelGrouped);
     addSafeListener(document.getElementById('active-filters-list-grouped'), 'click', handleRemoveFilter);
 
-    // --- ¡NUEVO LISTENER! ---
+    // Listener de Gestión de Listas
     addSafeListener(document.getElementById('btn-manage-lists'), 'click', handleManageLists);
-    // --- FIN DEL CAMBIO ---
 
     // Listeners Drag and Drop
     if (dragDropArea) {
@@ -172,7 +185,7 @@ function setupEventListeners() {
     }
 }
 function updateDynamicText() {
-    // ... (Sin cambios desde v7.6) ...
+    // ... (Sin cambios desde v7.9) ...
     const valInput = document.getElementById('input-valor');
     const searchTableInput = document.getElementById('input-search-table');
     const resultsTableDiv = document.getElementById('results-table');
@@ -189,7 +202,7 @@ function updateDynamicText() {
     }
 }
 async function setLanguage(langCode) {
-    // ... (Sin cambios desde v7.6) ...
+    // ... (Sin cambios desde v7.9) ...
     try { 
         await fetch(`/api/set_language/${langCode}`); 
         location.reload();
@@ -197,17 +210,17 @@ async function setLanguage(langCode) {
     catch (error) { console.error('Error al cambiar idioma:', error); }
 }
 // ---
-// SECCIÓN 3: MANEJO DE EVENTOS PRINCIPALES
+// SECCIÓN 3: MANEJO de EVENTOS PRINCIPALES
 // ---
 
 async function handleFileUpload(event) {
-    // ... (Sin cambios desde v7.6) ...
+    // ... (Sin cambios desde v7.9, excepto la lógica de 'undoHistoryCount') ...
     const file = event.target.files[0]; if (!file) return;
     const fileUploadList = document.getElementById('file-upload-list');
     const fileSizeMB = (file.size / (1024 * 1024)).toFixed(1);
     fileUploadList.innerHTML = `
         <div class="file-list-item">
-            <svg class="file-icon" ...></svg>
+            <svg class="file-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg>
             <div class="file-details">
                 <span class="file-name">${file.name}</span>
                 <span class="file-size">${fileSizeMB}MB</span>
@@ -242,7 +255,11 @@ async function handleFileUpload(event) {
         
         activeFilters = []; 
         document.getElementById('input-search-table').value = ''; 
-
+        
+        // --- ¡NUEVO! Resetea el estado de cambios ---
+        undoHistoryCount = 0; // No hay nada que deshacer
+        updateActionButtonsVisibility(); // Oculta los botones "Deshacer" y "Revertir"
+        
         toggleView('detailed', true); 
 
     } catch (error) { 
@@ -250,6 +267,8 @@ async function handleFileUpload(event) {
         todasLasColumnas = []; 
         columnasVisibles = []; 
         autocompleteOptions = {};
+        undoHistoryCount = 0;
+        updateActionButtonsVisibility();
         fileUploadList.innerHTML = `<p style="color: red;">Error al cargar el archivo.</p>`;
         renderColumnSelector();
         resetResumenCard(); 
@@ -257,7 +276,7 @@ async function handleFileUpload(event) {
 }
 
 async function handleAddFilter() {
-    // ... (Sin cambios desde v7.6) ...
+    // ... (Sin cambios desde v7.9) ...
     const colSelect = document.getElementById('select-columna');
     const valInput = document.getElementById('input-valor');
     const col = colSelect.value; 
@@ -275,7 +294,7 @@ async function handleAddFilter() {
 }
 
 async function handleClearFilters() { 
-    // ... (Sin cambios desde v7.6) ...
+    // ... (Sin cambios desde v7.9) ...
     activeFilters = []; 
     if (currentView === 'detailed') {
         document.getElementById('input-search-table').value = ''; 
@@ -284,7 +303,7 @@ async function handleClearFilters() {
 }
 
 async function handleRemoveFilter(event) {
-    // ... (Sin cambios desde v7.6) ...
+    // ... (Sin cambios desde v7.9) ...
     if (!event.target.classList.contains('remove-filter-btn')) return;
     const indexToRemove = parseInt(event.target.dataset.index, 10);
     activeFilters.splice(indexToRemove, 1);
@@ -292,7 +311,7 @@ async function handleRemoveFilter(event) {
 }
 
 function handleFullscreen(event) {
-    // ... (Sin cambios desde v7.6) ...
+    // ... (Sin cambios desde v7.9) ...
     const viewContainerId = (currentView === 'detailed') 
         ? 'view-container-detailed' 
         : 'view-container-grouped';
@@ -336,7 +355,7 @@ function handleFullscreen(event) {
 }
 
 function handleSearchTable() {
-    // ... (Sin cambios desde v7.6) ...
+    // ... (Sin cambios desde v7.9) ...
     const searchTableInput = document.getElementById('input-search-table');
     const searchTerm = searchTableInput.value.toLowerCase();
     
@@ -345,7 +364,7 @@ function handleSearchTable() {
             tabulatorInstance.clearFilter();
         } else {
             tabulatorInstance.setFilter(function(data){
-                for(let col of columnasVisibles){
+                for(let col of columnasVisibles.filter(c => c !== '_row_id')){
                     if(data[col] && String(data[col]).toLowerCase().includes(searchTerm)){
                         return true; 
                     }
@@ -360,11 +379,13 @@ function handleSearchTable() {
 
 
 async function handleDownloadExcel() {
-    // ... (Sin cambios desde v7.6) ...
-    if (currentData.length === 0 || !currentFileId) { 
+    // ... (Sin cambios desde v7.9) ...
+    if (!currentFileId) { 
         alert(i18n['no_data_to_download'] || "No hay datos para descargar."); 
         return; 
     }
+    
+    const colsToDownload = columnasVisibles.filter(c => c !== '_row_id');
     
     try {
         const response = await fetch('/api/download_excel', {
@@ -372,7 +393,7 @@ async function handleDownloadExcel() {
             body: JSON.stringify({ 
                 file_id: currentFileId, 
                 filtros_activos: activeFilters, 
-                columnas_visibles: columnasVisibles
+                columnas_visibles: colsToDownload 
             })
         });
         if (!response.ok) throw new Error('Error del servidor al generar Excel.');
@@ -394,7 +415,7 @@ async function handleDownloadExcel() {
 }
 
 async function handleDownloadExcelGrouped() {
-    // ... (Sin cambios desde v7.6) ...
+    // ... (Sin cambios desde v7.9) ...
     const select = document.getElementById('select-columna-agrupar');
     const colAgrupar = select ? select.value : null;
 
@@ -433,59 +454,70 @@ async function handleDownloadExcelGrouped() {
     }
 }
 
-// --- ¡NUEVA FUNCIÓN! ---
-/**
- * @description Muestra prompts para que el usuario edite las
- * listas de autocompletado y las guarda en el servidor.
- */
+// --- (handleManageLists sin cambios desde v7.9) ---
 async function handleManageLists() {
-    // 1. Pregunta al usuario qué columna quiere editar
-    // Usa las claves de 'i18n' que añadimos a translator.py
-    const colToEdit = prompt(i18n['prompt_col_to_edit'] || "Qué lista de columna quieres editar?\n(Ej: Status, Assignee)");
+    // ... (Esta es la función de "Añadir/Quitar con -") ...
     
-    // Si el usuario presiona Cancelar, sal de la función
+    const colToEdit = prompt(i18n['prompt_col_to_edit'] || "Qué lista de columna quieres editar?\n(Ej: Status, Assignee)");
     if (!colToEdit) return; 
-
-    // Verifica si esa columna existe en nuestras listas
-    if (!autocompleteOptions[colToEdit]) {
+    if (!(colToEdit in autocompleteOptions)) {
         alert(i18n['alert_col_not_found'] || "Columna no válida o no tiene autocompletado.");
         return;
     }
 
-    // 2. Muestra los valores actuales y pide los nuevos
-    const currentValues = autocompleteOptions[colToEdit].join(', ');
-    const promptText = (i18n['prompt_edit_list'] || "Editando lista para '{col}':\n\nValores actuales: {vals}\n\nIntroduce los nuevos valores separados por coma:")
-        .replace('{col}', colToEdit)
-        .replace('{vals}', currentValues);
-        
-    const newValuesStr = prompt(promptText);
+    const currentValues = autocompleteOptions[colToEdit] || [];
+    const valuesSet = new Set(currentValues);
+    const currentValuesStr = currentValues.length > 0 ? currentValues.join(', ') : "(Lista vacía)";
     
-    // Si el usuario presiona Cancelar
-    if (newValuesStr === null) return; 
+    const promptText = `Editando lista para '${colToEdit}':\n\n` +
+                       `Valores actuales: ${currentValuesStr}\n\n` +
+                       `Escriba los valores que desea AÑADIR.\n` +
+                       `Para ELIMINAR un valor, escríbalo con un guion (-) delante.\n\n` +
+                       `Ejemplo: Nuevo Valor, -Valor Antiguo, Otro Valor`;
+        
+    const modificationsStr = prompt(promptText);
+    if (modificationsStr === null) return; 
 
-    // 3. Convierte el string del usuario en un array limpio
-    const newValuesArray = newValuesStr.split(',') // Separa por comas
-        .map(val => val.trim())   // Limpia espacios en blanco
-        .filter(val => val);      // Elimina valores vacíos
+    const modificationsArray = modificationsStr.split(',') 
+        .map(val => val.trim())   
+        .filter(val => val);      
 
-    // 4. Actualiza el objeto de opciones local
+    let addedCount = 0;
+    let removedCount = 0;
+
+    modificationsArray.forEach(mod => {
+        if (mod.startsWith('-')) {
+            const valueToRemove = mod.substring(1).trim(); 
+            if (valuesSet.has(valueToRemove)) {
+                valuesSet.delete(valueToRemove);
+                removedCount++; 
+            }
+        } else {
+            const valueToAdd = mod.trim();
+            if (!valuesSet.has(valueToAdd)) {
+                valuesSet.add(valueToAdd);
+                addedCount++; 
+            }
+        }
+    });
+
+    const newValuesArray = Array.from(valuesSet).sort();
     autocompleteOptions[colToEdit] = newValuesArray;
 
-    // 5. ¡Envía el objeto COMPLETO al servidor para guardarlo!
     try {
         const response = await fetch('/api/save_autocomplete_lists', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            // Envía el objeto 'autocompleteOptions' global
             body: JSON.stringify(autocompleteOptions) 
         });
         
         if (!response.ok) throw new Error('Error del servidor al guardar');
         
-        alert(i18n['alert_save_success'] || "¡Listas guardadas! Los cambios se aplicarán la próxima vez que cargues un archivo.");
+        alert(`¡Listas guardadas para '${colToEdit}'!\n\n` +
+              `Añadidos: ${addedCount}\n` +
+              `Eliminados: ${removedCount}\n\n` +
+              `Los cambios se aplicarán la próxima vez que cargues un archivo.`);
         
-        // 6. Vuelve a renderizar la tabla detallada para que
-        // los nuevos dropdowns/autocomplete se actualicen INMEDIATAMENTE.
         if (currentView === 'detailed' && tabulatorInstance) {
             renderTable();
         }
@@ -493,9 +525,102 @@ async function handleManageLists() {
     } catch (error) {
         console.error("Error al guardar las listas:", error);
         alert(i18n['alert_save_error'] || "Error al guardar las listas.");
+        autocompleteOptions[colToEdit] = currentValues;
     }
 }
-// --- FIN DE LA NUEVA FUNCIÓN ---
+
+// ---
+// --- ¡NUEVAS FUNCIONES DE DESHACER/REVERTIR! ---
+// ---
+
+/**
+ * @description Llama a la API para DESHACER el último cambio de celda.
+ */
+async function handleUndoChange() {
+    // 1. Comprueba si hay algo que deshacer (seguridad del frontend)
+    if (undoHistoryCount === 0 || !currentFileId) {
+        alert("No hay nada que deshacer.");
+        return;
+    }
+    
+    console.log("Deshaciendo último cambio...");
+    
+    try {
+        // 2. Llama a la nueva API /api/undo_change
+        const response = await fetch('/api/undo_change', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ file_id: currentFileId })
+        });
+
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error);
+        
+        // 3. ¡Éxito! El backend nos devuelve los datos restaurados.
+        console.log(result.message);
+        
+        // 4. Actualiza los datos locales y repinta la tabla
+        //    (Esto es más rápido que llamar a getFilteredData de nuevo)
+        currentData = result.data;
+        tableData = [...currentData];
+        renderTable(); // Repinta la tabla con los datos "deshechos"
+        
+        // 5. Actualiza el estado de la pila de deshacer
+        undoHistoryCount = result.history_count;
+        updateActionButtonsVisibility(); // Oculta botones si el contador es 0
+
+    } catch (error) {
+        console.error("Error al deshacer el cambio:", error);
+        alert("Error al deshacer: " + error.message);
+    }
+}
+
+/**
+ * @description Llama a la API para REVERTIR TODOS los cambios al original.
+ * (Esta era la antigua 'handleRevertChanges')
+ */
+async function handleRevertToOriginal() {
+    // 1. Pide confirmación al usuario (¡Opción Nuclear!)
+    if (!confirm("¿Estás seguro de que quieres REVERTIR TODOS los cambios al archivo original?\n\nEsto no se puede deshacer.")) {
+        return;
+    }
+    
+    if (!currentFileId) {
+        alert("No hay un archivo cargado.");
+        return;
+    }
+    
+    console.log("Revirtiendo al original...");
+    
+    try {
+        // 2. Llama a la API /api/revert_changes (que ahora es la "nuclear")
+        const response = await fetch('/api/revert_changes', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ file_id: currentFileId })
+        });
+
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error);
+        
+        // 3. ¡Éxito! El backend nos devuelve los datos prístinos.
+        alert(result.message);
+        
+        // 4. Actualiza los datos locales y repinta la tabla
+        currentData = result.data;
+        tableData = [...currentData];
+        renderTable(); // Repinta la tabla con los datos originales
+        
+        // 5. Resetea el estado de la pila de deshacer
+        undoHistoryCount = 0; // No hay nada que deshacer
+        updateActionButtonsVisibility(); // Oculta los botones
+
+    } catch (error) {
+        console.error("Error al revertir al original:", error);
+        alert("Error al revertir: " + error.message);
+    }
+}
+// --- FIN DE LAS NUEVAS FUNCIONES ---
 
 
 // ---
@@ -503,7 +628,7 @@ async function handleManageLists() {
 // ---
 
 function resetResumenCard() {
-    // ... (Sin cambios desde v7.6) ...
+    // ... (Sin cambios desde v7.9) ...
     const totalFacturas = document.getElementById('resumen-total-facturas');
     const montoTotal = document.getElementById('resumen-monto-total');
     const montoPromedio = document.getElementById('resumen-monto-promedio');
@@ -515,7 +640,7 @@ function resetResumenCard() {
 
 
 function renderFilters() {
-    // ... (Sin cambios desde v7.6) ...
+    // ... (Sin cambios desde v7.9) ...
     const listId = (currentView === 'detailed') ? 'active-filters-list' : 'active-filters-list-grouped';
     const clearBtnId = (currentView === 'detailed') ? 'btn-clear-filters' : 'btn-clear-filters-grouped';
     
@@ -550,7 +675,7 @@ function renderFilters() {
 
 /**
  * @description Renderiza o actualiza la tabla DETALLADA (principal).
- * ¡MODIFICADO! Ahora usa 'autocompleteOptions' para definir los editores.
+ * ¡MODIFICADO! Conecta el 'cellEdited' a la nueva API /api/update_cell.
  */
 function renderTable(data = null, forceClear = false) {
     const resultsTableDiv = document.getElementById('results-table');
@@ -577,7 +702,7 @@ function renderTable(data = null, forceClear = false) {
         return; 
     }
 
-    // --- 1. Definir las Columnas para Tabulator (¡LÓGICA MEJORADA!) ---
+    // --- 1. Definir las Columnas para Tabulator (¡MODIFICADO!) ---
     const columnDefs = [
         {
             title: "#",
@@ -592,48 +717,39 @@ function renderTable(data = null, forceClear = false) {
     columnasVisibles.forEach(colName => {
         const colTitle = (colName === '_row_status') ? "Row Status" : colName;
         
-        let editorType = "input"; // Editor por defecto
+        let editorType = "input"; 
         let editorParams = {};
         
-        // --- ¡LÓGICA DE EDITOR MEJORADA! ---
-        // Comprueba si tenemos opciones para esta columna en nuestro objeto global
-        if (autocompleteOptions && autocompleteOptions[colName]) {
+        if (autocompleteOptions && autocompleteOptions[colName] && autocompleteOptions[colName].length > 0) {
             const options = autocompleteOptions[colName];
             
             if (options.length > 50) {
-                // Si hay MUCHAS opciones (ej. >50 Nombres de Vendedor),
-                // usa 'autocomplete' que es un <input> con sugerencias.
                 editorType = "autocomplete";
                 editorParams = {
-                    values: options,         // Lista de opciones
-                    showListOnEmpty: true,   // Mostrar lista al hacer clic
-                    freetext: true,          // Permitir escribir valores nuevos
+                    values: options, showListOnEmpty: true, freetext: true,
                 };
             } else {
-                // Si hay POCAS opciones (ej. "Paid", "Pending"),
-                // usa 'select' que es un <select> dropdown.
                 editorType = "select";
-                editorParams = {
-                    // Añade una opción vacía al principio
-                    values: ["", ...options] 
-                };
+                editorParams = { values: ["", ...options] };
             }
         }
-        // --- FIN DE LA LÓGICA MEJORADA ---
+        
+        const isVisible = (colName !== '_row_id'); // Oculta _row_id
 
         columnDefs.push({
             title: colTitle,
             field: colName,
-            editor: editorType,           // 'input', 'select', o 'autocomplete'
-            editorParams: editorParams,   // Parámetros para el editor
+            editor: editorType,          
+            editorParams: editorParams,  
             minWidth: 150, 
+            visible: isVisible, 
         });
     });
 
     // --- 2. Comprobar si la instancia ya existe ---
     if (tabulatorInstance) {
         console.log("Tabulator (Detallada): Actualizando datos...");
-        tabulatorInstance.setColumns(columnDefs); // Actualiza columnas (por si cambiaron las opciones)
+        tabulatorInstance.setColumns(columnDefs); 
         tabulatorInstance.setData(dataToRender);
         
         if(dataToRender.length === 0) {
@@ -657,10 +773,55 @@ function renderTable(data = null, forceClear = false) {
             placeholder: `<p>${i18n['info_upload'] || 'Upload file'}</p>`,
         });
 
-        // --- 4. Listeners de Edición (Sin cambios) ---
-        tabulatorInstance.on("cellEdited", function(cell){
-            console.log(`CELDA EDITADA: Fila ${cell.getRow().getPosition()}, Columna ${cell.getField()}, Nuevo Valor: ${cell.getValue()}`);
-            cell.getRow().getElement().style.backgroundColor = "#FFF9E5";
+        // --- 4. ¡LISTENER DE EDICIÓN CONECTADO A LA PILA DE DESHACER! ---
+        tabulatorInstance.on("cellEdited", async function(cell){
+            
+            // 1. Obtiene los datos
+            const newValue = cell.getValue();
+            const colField = cell.getField();
+            const rowData = cell.getRow().getData();
+            const rowId = rowData._row_id; 
+
+            // 2. Comprobación: No guardar si el valor no cambió
+            if (newValue === cell.getOldValue()) {
+                return; // No hacer nada si el valor es el mismo
+            }
+
+            console.log(`Guardando... Fila ID: ${rowId}, Col: ${colField}, Nuevo Valor: ${newValue}`);
+
+            // 3. Pinta la fila de amarillo mientras se guarda
+            cell.getRow().getElement().style.backgroundColor = "#FFF9E5"; 
+            
+            try {
+                // 4. Llama a la API de guardado
+                const response = await fetch('/api/update_cell', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        file_id: currentFileId,
+                        row_id: rowId,
+                        columna: colField,
+                        valor: newValue
+                    })
+                });
+                
+                const result = await response.json();
+                if (!response.ok) throw new Error(result.error);
+                
+                // 5. ¡Éxito! El backend guardó el "borrador" y actualizó la pila
+                console.log(result.message);
+                
+                // 6. Actualiza el contador de "deshacer" y muestra los botones
+                undoHistoryCount = result.history_count;
+                updateActionButtonsVisibility();
+
+            } catch (error) {
+                console.error("Error al guardar celda:", error);
+                alert("Error al guardar el cambio: " + error.message + "\n\nEl cambio será revertido localmente.");
+                // 7. Si falla, revierte el cambio en la tabla visual
+                cell.restoreOldValue();
+                cell.getRow().getElement().style.backgroundColor = ""; // Quita el amarillo
+            }
         });
         
         tabulatorInstance.on("renderComplete", function(){
@@ -671,11 +832,33 @@ function renderTable(data = null, forceClear = false) {
 
 
 // ---
-// SECCIÓN 5: LÓGICA DE VISTAS (Sin Cambios)
+// SECCIÓN 5: LÓGICA DE VISTAS (MODIFICADA)
 // ---
 
+/**
+ * @description Muestra u oculta los botones "Deshacer" y "Revertir Original"
+ * basado en si hay cambios en la pila de deshacer (undoHistoryCount).
+ */
+function updateActionButtonsVisibility() {
+    const btnUndo = document.getElementById('btn-undo-change');
+    const btnRevert = document.getElementById('btn-revert-original');
+    if (!btnUndo || !btnRevert) return;
+    
+    // Solo se muestran si hay cambios Y estamos en la vista detallada
+    if (undoHistoryCount > 0 && currentView === 'detailed') {
+        btnUndo.style.display = 'inline-block';
+        btnRevert.style.display = 'inline-block';
+        // Actualiza el texto del botón Deshacer con el contador
+        btnUndo.textContent = `Deshacer (${undoHistoryCount})`;
+    } else {
+        btnUndo.style.display = 'none';
+        btnRevert.style.display = 'none';
+    }
+}
+
+
 async function refreshActiveView() {
-    // ... (Sin cambios desde v7.6) ...
+    // ... (Sin cambios desde v7.9) ...
     if (currentView === 'detailed') {
         renderGroupedTable(null, null, true); 
         await getFilteredData();
@@ -684,10 +867,13 @@ async function refreshActiveView() {
         renderTable(null, true); 
         await getGroupedData();
     }
+    
+    // ¡NUEVO! Actualiza la visibilidad de los botones
+    updateActionButtonsVisibility();
 }
 
 async function getFilteredData() {
-    // ... (Sin cambios desde v7.6) ...
+    // ... (Sin cambios desde v7.9) ...
     const resultsHeader = document.getElementById('results-header');
     
     if (!currentFileId) { 
@@ -732,7 +918,7 @@ async function getFilteredData() {
 
 
 async function getGroupedData() {
-    // ... (Sin cambios desde v7.6) ...
+    // ... (Sin cambios desde v7.9) ...
     const select = document.getElementById('select-columna-agrupar');
     const colAgrupar = select ? select.value : null;
 
@@ -770,7 +956,7 @@ async function getGroupedData() {
 }
 
 function toggleView(view, force = false) {
-    // ... (Sin cambios desde v7.6) ...
+    // ... (Sin cambios desde v7.9) ...
     if (view === currentView && !force) return; 
 
     currentView = view;
@@ -816,10 +1002,13 @@ function toggleView(view, force = false) {
     } else if (!force) {
         refreshActiveView();
     }
+    
+    // ¡NUEVO! Actualiza la visibilidad de los botones al cambiar de vista
+    updateActionButtonsVisibility();
 }
 
 function populateGroupDropdown() {
-    // ... (Sin cambios desde v7.6) ...
+    // ... (Sin cambios desde v7.9) ...
     const select = document.getElementById('select-columna-agrupar');
     if (!select) return; 
     
@@ -827,7 +1016,7 @@ function populateGroupDropdown() {
     select.innerHTML = `<option value="">${i18n['group_by_placeholder'] || 'Select column...'}</option>`;
 
     const opcionesValidas = COLUMNAS_AGRUPABLES.filter(col => 
-        todasLasColumnas.includes(col)
+        todasLasColumnas.includes(col) && col !== '_row_id'
     );
 
     opcionesValidas.forEach(colName => {
@@ -845,7 +1034,7 @@ async function handleGroupColumnChange() {
 }
 
 function renderGroupedTable(data, colAgrupada, forceClear = false) {
-    // ... (Sin cambios desde v7.6) ...
+    // ... (Sin cambios desde v7.9) ...
     const resultsTableDiv = document.getElementById('results-table-grouped');
     if (!resultsTableDiv) {
          console.error("ERROR: No se encontró el div '#results-table-grouped'.");
@@ -914,12 +1103,12 @@ function renderGroupedTable(data, colAgrupada, forceClear = false) {
 }
 
 function populateColumnDropdowns() {
-    // ... (Sin cambios desde v7.6) ...
+    // ... (Sin cambios desde v7.9) ...
     const colSelect = document.getElementById('select-columna');
     if (!colSelect) return; 
     
     colSelect.innerHTML = `<option value="">${i18n['column_select'] || 'Select col...'}</option>`;
-    todasLasColumnas.forEach(col => {
+    todasLasColumnas.filter(col => col !== '_row_id').forEach(col => {
         const option = document.createElement('option'); 
         option.value = col; 
         option.textContent = (col === '_row_status') ? "Row Status" : col;
@@ -931,7 +1120,7 @@ function populateColumnDropdowns() {
 
 
 // ---
-// ¡BLOQUE DE INICIALIZACIÓN! (Sin cambios desde v7.6)
+// ¡BLOQUE DE INICIALIZACIÓN! (MODIFICADO)
 // ---
 document.addEventListener('DOMContentLoaded', async (event) => {
     
@@ -943,7 +1132,7 @@ document.addEventListener('DOMContentLoaded', async (event) => {
             currentFileId = SESSION_DATA.file_id;
             todasLasColumnas = SESSION_DATA.columnas;
             columnasVisibles = [...todasLasColumnas];
-
+            
             if (SESSION_DATA.autocomplete_options) {
                  autocompleteOptions = SESSION_DATA.autocomplete_options;
             }
@@ -951,11 +1140,20 @@ document.addEventListener('DOMContentLoaded', async (event) => {
             populateColumnDropdowns();
             renderColumnSelector();
             
+            // --- ¡NUEVO! Resetea el estado de cambios al cargar la página ---
+            // Asumimos que la sesión se reinicia, así que el historial se pierde.
+            // (Una implementación más avanzada guardaría el historial en la sesión
+            // y lo recuperaría aquí, pero eso es mucho más complejo).
+            undoHistoryCount = 0;
+            updateActionButtonsVisibility();
+            
             refreshActiveView(); 
             
         } else {
             console.log("No se encontró sesión activa.");
             renderColumnSelector();
+            undoHistoryCount = 0;
+            updateActionButtonsVisibility();
         }
         
         setupEventListeners(); 

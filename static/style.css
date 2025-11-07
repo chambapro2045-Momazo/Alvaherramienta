@@ -733,3 +733,39 @@ body.fullscreen-mode .table-actions {
     background-color: var(--color-blanco);
     min-width: 250px;
 }
+
+
+/* --- 9. ¡NUEVO! Estilos para Botones de Edición (Tu Punto 2) --- */
+
+/* Botón "Consolidar" (Verde) */
+.btn-verde-secundario {
+    background-color: rgba(0, 128, 0, 0.1); /* Verde claro */
+    color: #006400; /* Verde oscuro */
+    border: none;
+    border-radius: var(--radio-inputs);
+    padding: 0.65rem 1rem;
+    font-weight: 600;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap; 
+}
+
+.btn-verde-secundario:hover {
+    background-color: rgba(0, 128, 0, 0.2);
+}
+
+/* Botón "Revertir Original" en la Sidebar (Peligro) */
+.btn-peligro {
+    /* Basado en btn-small-link pero con colores de peligro */
+    background-color: var(--color-blanco);
+    color: var(--color-rojo); /* Texto rojo */
+    border: 1px solid var(--color-rojo); /* Borde rojo */
+    font-weight: 600;
+}
+
+.btn-peligro:hover {
+    background-color: var(--color-rojo); /* Fondo rojo sólido */
+    color: var(--color-blanco); /* Texto blanco */
+    border-color: var(--color-rojo);
+}

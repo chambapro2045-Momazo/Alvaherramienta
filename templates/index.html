@@ -49,7 +49,12 @@
         <button id="btn-manage-lists" class="btn-small-link" style="width: 100%;">
             {{ get_text(lang, 'manage_lists_button') }}
         </button>
-    </aside>
+        
+        <h3 style="margin-top: 1.5rem;">5. Acciones de Riesgo</h3>
+        <button id="btn-revert-original" class="btn-small-link btn-peligro" style="width: 100%; display: none;" title="Revierte TODOS los cambios al archivo original">
+            Revertir a Original
+        </button>
+        </aside>
 
     <main class="content">
 
@@ -95,13 +100,14 @@
                 <div id="active-filters-list" style="flex-grow: 1; display: flex; flex-wrap: wrap; gap: 0.5rem;">
                     </div>
                 
+                <button id="btn-commit-changes" class="btn-verde-secundario" style="display: none;" title="Guarda todos los cambios como 'estables' y limpia el historial de deshacer">
+                    Consolidar Cambios
+                </button>
+
                 <button id="btn-undo-change" class="btn-rojo-secundario" style="display: none;" title="Deshace la última edición de celda">
                     Deshacer
                 </button>
                 
-                <button id="btn-revert-original" class="btn-rojo-secundario" style="display: none; background-color: #a00; color: white;" title="Revierte TODOS los cambios al archivo original">
-                    Revertir Original
-                </button>
                 <button id="btn-clear-filters" class="btn-rojo-secundario" style="display: none;">{{ get_text(lang, 'clear_all_button') }}</button>
                 
                 <div class="search-wrapper">
@@ -152,7 +158,8 @@
     </main>
 
     <script>
-        // Inyecta los datos de la sesión (sin cambios)
+        // ¡MODIFICADO! (Tu Punto 3)
+        // Inyecta los datos de la sesión, incluyendo el conteo del historial
         var SESSION_DATA = {{ session_data | tojson }};
     </script>
 

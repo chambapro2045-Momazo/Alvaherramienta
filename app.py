@@ -1,4 +1,8 @@
-# app.py (Versión 6.8 - Corrección de "Opción Nuclear")
+# app.py (Versión 6.9 - N° Fila Fijo en Descarga)
+# NOTA:
+# 1. Modificada la API '/api/download_excel' para que
+#    ahora incluya la columna '_row_id' y la renombre
+#    a "N° Fila Original" en el Excel descargado.
 
 import os
 import pandas as pd
@@ -190,10 +194,9 @@ def upload_file():
         session.clear()
         data_dict_list = df.to_dict('records')
         
-        # 2 versiones + historial
-        session['df_pristine'] = data_dict_list # Original-Original (Nunca cambia)
-        session['df_staging'] = data_dict_list  # Borrador de trabajo
-        session['history'] = []                 # Pila de Deshacer
+        session['df_pristine'] = data_dict_list 
+        session['df_staging'] = data_dict_list  
+        session['history'] = []                 
         session['file_id'] = file_id
 
         if os.path.exists(file_path):
@@ -231,16 +234,13 @@ def save_autocomplete_lists():
         return jsonify({"error": str(e)}), 500
 
 # ---
-# --- APIS DE EDICIÓN ---
+# --- APIS DE EDICIÓN (Sin cambios) ---
 # ---
-
-# --- (API /api/update_cell sin cambios) ---
 @app.route('/api/update_cell', methods=['POST'])
 def update_cell():
     """
-    Actualiza una celda en 'df_staging' y guarda el
-    cambio anterior en la pila de deshacer 'history'.
-    Recalcula y devuelve los KPIs.
+    Actualiza una celda en 'df_staging', guarda en 'history'
+    y recalcula los KPIs.
     """
     try:
         data = request.json
@@ -262,7 +262,6 @@ def update_cell():
                 
                 old_val = fila.get(columna)
                 
-                # No hacer nada si el valor no cambió
                 if old_val == nuevo_valor:
                     df_staging_actual = pd.DataFrame.from_records(datos_staging_lista)
                     resumen_kpis = _calculate_kpis(df_staging_actual)
@@ -294,7 +293,6 @@ def update_cell():
         session['df_staging'] = datos_staging_lista
         session['history'] = history_stack
         
-        # Recalcular KPIs
         df_staging_modificado = pd.DataFrame.from_records(datos_staging_lista)
         resumen_kpis = _calculate_kpis(df_staging_modificado)
         
@@ -309,7 +307,6 @@ def update_cell():
         print(f"Error en /api/update_cell: {e}") 
         return jsonify({"error": str(e)}), 500
 
-# --- (API /api/undo_change sin cambios) ---
 @app.route('/api/undo_change', methods=['POST'])
 def undo_change():
     """
@@ -345,7 +342,6 @@ def undo_change():
         session['history'] = history_stack
         session['df_staging'] = datos_staging_lista
         
-        # Recalcular KPIs
         df_staging_revertido = pd.DataFrame.from_records(datos_staging_lista)
         resumen_kpis = _calculate_kpis(df_staging_revertido)
         
@@ -361,7 +357,6 @@ def undo_change():
         print(f"Error en /api/undo_change: {e}") 
         return jsonify({"error": str(e)}), 500
 
-# --- (API /api/revert_changes sin cambios) ---
 @app.route('/api/revert_changes', methods=['POST'])
 def revert_changes():
     """
@@ -373,20 +368,14 @@ def revert_changes():
         file_id = data.get('file_id')
         _check_file_id(file_id)
 
-        # 2. Obtener la copia "prístina" (el original-original)
         datos_pristine_lista = _get_df_from_session('df_pristine')
              
-        # 3. Sobrescribir el "borrador" (staging)
         session['df_staging'] = list(datos_pristine_lista)
-        
-        # 4. Limpiar la pila de deshacer
         session['history'] = []
         
-        # 5. Recalcular KPIs del original
         df_pristine = pd.DataFrame.from_records(datos_pristine_lista)
         resumen_kpis = _calculate_kpis(df_pristine)
         
-        # 6. Responder
         return jsonify({
             "status": "success", 
             "message": "Cambios revertidos al original.",
@@ -399,38 +388,23 @@ def revert_changes():
         print(f"Error en /api/revert_changes: {e}") 
         return jsonify({"error": str(e)}), 500
         
-# ---
-# --- ¡API DE CONSOLIDAR CORREGIDA! ---
-# ---
 @app.route('/api/commit_changes', methods=['POST'])
 def commit_changes():
     """
-    Consolida los cambios. Esta acción limpia el historial de 
-    deshacer, haciendo que los cambios actuales en 'df_staging'
-    sean permanentes (hasta la próxima consolidación o reversión).
-    
-    ¡NO SOBRESCRIBE 'df_pristine'!
+    Consolida los cambios. Limpia el historial de deshacer.
+    NO sobrescribe 'df_pristine'.
     """
     try:
-        # 1. Validar
         data = request.json
         file_id = data.get('file_id')
         _check_file_id(file_id)
-
-        # 2. Obtener el "borrador" actual (staging)
-        #    (No necesitamos los datos, pero es una buena validación)
+        
+        # Valida que df_staging exista
         _get_df_from_session('df_staging')
              
-        # 3. --- ¡ESTE ERA EL BUG! ---
-        #    La línea "session['df_pristine'] = list(datos_staging_lista)"
-        #    se ha eliminado. Ya no sobrescribimos el original.
-        #    --- FIN DEL BUG ---
-        
-        # 4. Limpiar la pila de deshacer.
-        #    Esto "consolida" los cambios, ya que no se pueden deshacer.
+        # Limpia la pila de deshacer
         session['history'] = []
         
-        # 5. Responder
         return jsonify({
             "status": "success", 
             "message": "Cambios consolidados. El historial de deshacer ha sido limpiado.",
@@ -440,9 +414,6 @@ def commit_changes():
     except Exception as e:
         print(f"Error en /api/commit_changes: {e}") 
         return jsonify({"error": str(e)}), 500
-# ---
-# --- FIN DE LA CORRECCIÓN ---
-# ---
 
 # --- (API /api/filter sin cambios) ---
 @app.route('/api/filter', methods=['POST'])
@@ -460,7 +431,6 @@ def filter_data():
 
         resultado_df_filtrado = aplicar_filtros_dinamicos(df_staging, filtros_recibidos)
 
-        # Llama a la función helper SOBRE EL DATAFRAME FILTRADO
         resumen_stats = _calculate_kpis(resultado_df_filtrado)
 
         resultado_json = resultado_df_filtrado.to_dict(orient="records") 
@@ -474,9 +444,13 @@ def filter_data():
         print(f"Error en /api/filter: {e}") 
         return jsonify({"error": str(e)}), 500
 
-# --- (API /api/download_excel sin cambios) ---
+# --- ¡API DE DESCARGA DE EXCEL MODIFICADA! ---
 @app.route('/api/download_excel', methods=['POST'])
 def download_excel():
+    """
+    Descarga la vista detallada (filtrada) actual.
+    ¡AHORA incluye y renombra el N° de Fila Original!
+    """
     try:
         data = request.json
         file_id = data.get('file_id')
@@ -484,24 +458,43 @@ def download_excel():
         columnas_visibles = data.get('columnas_visibles') 
 
         _check_file_id(file_id)
+        # Obtiene el "borrador" (staging) que incluye las ediciones del usuario
         df_staging = _get_df_from_session_as_df('df_staging')
 
+        # Aplica los filtros seleccionados
         resultado_df = aplicar_filtros_dinamicos(df_staging, filtros_recibidos)
         
         df_a_exportar = resultado_df
+        # Filtra por columnas visibles (si se proporcionaron)
         if columnas_visibles and isinstance(columnas_visibles, list):
+             # Asegurarnos de que _row_id esté siempre si existe
+             if '_row_id' in resultado_df.columns and '_row_id' not in columnas_visibles:
+                 columnas_visibles.append('_row_id')
+                 
              columnas_existentes = [col for col in columnas_visibles if col in resultado_df.columns]
              if columnas_existentes:
                  df_a_exportar = resultado_df[columnas_existentes]
 
+        # --- ¡NUEVO! Renombrar _row_id para la descarga ---
         if '_row_id' in df_a_exportar.columns:
-            df_a_exportar = df_a_exportar.drop(columns=['_row_id'])
+            # Suma 1 para que sea 1-indexed
+            df_a_exportar['_row_id'] = df_a_exportar['_row_id'] + 1
+            # Renombra la columna
+            df_a_exportar = df_a_exportar.rename(columns={'_row_id': 'N° Fila Original'})
+            
+            # Mover la columna al principio (opcional pero limpio)
+            cols = list(df_a_exportar.columns)
+            cols.insert(0, cols.pop(cols.index('N° Fila Original')))
+            df_a_exportar = df_a_exportar[cols]
+        # --- Fin de la modificación ---
 
+        # Prepara el archivo Excel en memoria
         output_buffer = io.BytesIO()
         with pd.ExcelWriter(output_buffer, engine='xlsxwriter') as writer:
             df_a_exportar.to_excel(writer, sheet_name='Resultados', index=False)
         output_buffer.seek(0)
         
+        # Envía el archivo al usuario
         return send_file(
             output_buffer,
             as_attachment=True,

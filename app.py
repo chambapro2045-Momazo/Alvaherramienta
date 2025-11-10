@@ -1,8 +1,4 @@
-# app.py (Versión 6.9 - N° Fila Fijo en Descarga)
-# NOTA:
-# 1. Modificada la API '/api/download_excel' para que
-#    ahora incluya la columna '_row_id' y la renombre
-#    a "N° Fila Original" en el Excel descargado.
+# app.py (Versión 7.2 - Con ID Secuencial y Scroll)
 
 import os
 import pandas as pd
@@ -15,6 +11,7 @@ from flask_session import Session
 
 # --- Importar tus módulos ---
 from modules.loader import cargar_datos
+# ¡Importa la nueva versión de filters!
 from modules.filters import aplicar_filtros_dinamicos
 from modules.translator import get_text, LANGUAGES
 from modules.json_manager import cargar_json, guardar_json 
@@ -194,7 +191,6 @@ def upload_file():
         session.clear()
         data_dict_list = df.to_dict('records')
         
-        session['df_pristine'] = data_dict_list 
         session['df_staging'] = data_dict_list  
         session['history'] = []                 
         session['file_id'] = file_id
@@ -234,8 +230,10 @@ def save_autocomplete_lists():
         return jsonify({"error": str(e)}), 500
 
 # ---
-# --- APIS DE EDICIÓN (Sin cambios) ---
+# --- APIS DE EDICIÓN ---
 # ---
+
+# --- (API /api/update_cell sin cambios) ---
 @app.route('/api/update_cell', methods=['POST'])
 def update_cell():
     """
@@ -258,7 +256,7 @@ def update_cell():
         
         fila_modificada = False
         for fila in datos_staging_lista:
-            if int(fila.get('_row_id')) == int(row_id):
+            if str(fila.get('_row_id')) == str(row_id): 
                 
                 old_val = fila.get(columna)
                 
@@ -273,6 +271,7 @@ def update_cell():
                     })
 
                 change_obj = {
+                    'action': 'update', 
                     'row_id': row_id,
                     'columna': columna,
                     'old_val': old_val,
@@ -307,11 +306,12 @@ def update_cell():
         print(f"Error en /api/update_cell: {e}") 
         return jsonify({"error": str(e)}), 500
 
+# --- (API /api/undo_change sin cambios) ---
 @app.route('/api/undo_change', methods=['POST'])
 def undo_change():
     """
-    Deshace el último cambio de 'history' y lo aplica a 'df_staging'.
-    Recalcula y devuelve los KPIs.
+    Deshace la última acción (update, add, o delete) de 'history'
+    y la revierte en 'df_staging'.
     """
     try:
         data = request.json
@@ -322,22 +322,37 @@ def undo_change():
         if not history_stack:
             return jsonify({"error": "No hay nada que deshacer."}), 404
             
-        last_change = history_stack.pop() 
-        row_id_to_revert = last_change.get('row_id')
-        col_to_revert = last_change.get('columna')
-        value_to_restore = last_change.get('old_val') 
+        last_action = history_stack.pop()
+        action_type = last_action.get('action')
         
         datos_staging_lista = _get_df_from_session('df_staging')
         
-        fila_revertida = False
-        for fila in datos_staging_lista:
-            if int(fila.get('_row_id')) == int(row_id_to_revert):
-                fila[col_to_revert] = value_to_restore 
-                fila_revertida = True
-                break
-        
-        if not fila_revertida:
-            raise Exception(f"Error de consistencia: no se encontró la fila {row_id_to_revert} para deshacer.")
+        if action_type == 'update':
+            row_id_to_revert = last_action.get('row_id')
+            col_to_revert = last_action.get('columna')
+            value_to_restore = last_action.get('old_val') 
+            
+            fila_revertida = False
+            for fila in datos_staging_lista:
+                if str(fila.get('_row_id')) == str(row_id_to_revert):
+                    fila[col_to_revert] = value_to_restore 
+                    fila_revertida = True
+                    break
+            if not fila_revertida:
+                raise Exception(f"Error de consistencia: no se encontró la fila {row_id_to_revert} para deshacer update.")
+
+        elif action_type == 'add':
+            row_id_to_remove = last_action.get('row_id')
+            datos_staging_lista = [fila for fila in datos_staging_lista if str(fila.get('_row_id')) != str(row_id_to_remove)]
+            
+        elif action_type == 'delete':
+            row_to_restore = last_action.get('deleted_row')
+            if not row_to_restore:
+                raise Exception("Error de consistencia: no se encontró 'deleted_row' para deshacer delete.")
+            datos_staging_lista.append(row_to_restore)
+            
+        else:
+            raise Exception(f"Tipo de acción desconocida en el historial: {action_type}")
         
         session['history'] = history_stack
         session['df_staging'] = datos_staging_lista
@@ -347,7 +362,7 @@ def undo_change():
         
         return jsonify({
             "status": "success",
-            "message": f"Cambio en Fila {row_id_to_revert} deshecho.",
+            "message": f"Acción '{action_type}' deshecha.",
             "data": datos_staging_lista, 
             "history_count": len(history_stack),
             "resumen": resumen_kpis
@@ -357,52 +372,19 @@ def undo_change():
         print(f"Error en /api/undo_change: {e}") 
         return jsonify({"error": str(e)}), 500
 
-@app.route('/api/revert_changes', methods=['POST'])
-def revert_changes():
-    """
-    Restaura 'df_staging' a 'df_pristine' (Opción Nuclear).
-    Limpia el historial. Recalcula y devuelve los KPIs del original.
-    """
-    try:
-        data = request.json
-        file_id = data.get('file_id')
-        _check_file_id(file_id)
-
-        datos_pristine_lista = _get_df_from_session('df_pristine')
-             
-        session['df_staging'] = list(datos_pristine_lista)
-        session['history'] = []
-        
-        df_pristine = pd.DataFrame.from_records(datos_pristine_lista)
-        resumen_kpis = _calculate_kpis(df_pristine)
-        
-        return jsonify({
-            "status": "success", 
-            "message": "Cambios revertidos al original.",
-            "data": datos_pristine_lista,
-            "history_count": 0,
-            "resumen": resumen_kpis
-        })
-        
-    except Exception as e:
-        print(f"Error en /api/revert_changes: {e}") 
-        return jsonify({"error": str(e)}), 500
-        
+# --- (API /api/commit_changes sin cambios) ---
 @app.route('/api/commit_changes', methods=['POST'])
 def commit_changes():
     """
     Consolida los cambios. Limpia el historial de deshacer.
-    NO sobrescribe 'df_pristine'.
     """
     try:
         data = request.json
         file_id = data.get('file_id')
         _check_file_id(file_id)
         
-        # Valida que df_staging exista
         _get_df_from_session('df_staging')
              
-        # Limpia la pila de deshacer
         session['history'] = []
         
         return jsonify({
@@ -413,6 +395,131 @@ def commit_changes():
         
     except Exception as e:
         print(f"Error en /api/commit_changes: {e}") 
+        return jsonify({"error": str(e)}), 500
+
+# --- ¡API /api/add_row MODIFICADA! (Tu Punto 1 y 2) ---
+@app.route('/api/add_row', methods=['POST'])
+def add_row():
+    """
+    Añade una nueva fila en blanco a 'df_staging' y
+    registra la acción en 'history'.
+    ¡NUEVO! Asigna un ID secuencial (max_id + 1).
+    ¡NUEVO! Devuelve el 'new_row_id' para el scroll.
+    """
+    try:
+        data = request.json
+        file_id = data.get('file_id')
+        _check_file_id(file_id)
+        
+        datos_staging_lista = _get_df_from_session('df_staging')
+        history_stack = session.get('history', [])
+        
+        if not datos_staging_lista:
+            return jsonify({"error": "No hay datos cargados para añadir una fila."}), 400
+            
+        # 1. Determina las columnas
+        columnas = list(datos_staging_lista[0].keys())
+        # 2. Crea una fila nueva (diccionario)
+        nueva_fila = {col: "" for col in columnas}
+        
+        # --- ¡NUEVA LÓGICA DE ID! (Tu Punto 1) ---
+        # 3. Asigna un ID secuencial (max_id + 1)
+        #    Esto asegura que sea el siguiente número (ej. 6115)
+        max_id = max([int(fila.get('_row_id', 0)) for fila in datos_staging_lista])
+        nuevo_id = max_id + 1
+        
+        nueva_fila['_row_id'] = nuevo_id
+        # --- FIN DE LA LÓGICA DE ID ---
+        
+        # 4. Añade la fila al "borrador"
+        datos_staging_lista.append(nueva_fila)
+        
+        # 5. Guarda la acción en el historial
+        change_obj = {
+            'action': 'add',
+            'row_id': nuevo_id # Guardamos el ID para poder deshacerlo
+        }
+        history_stack.append(change_obj)
+        if len(history_stack) > UNDO_STACK_LIMIT:
+            history_stack.pop(0)
+            
+        # 6. Guardar todo de vuelta en la sesión
+        session['df_staging'] = datos_staging_lista
+        session['history'] = history_stack
+        
+        # 7. Recalcular KPIs
+        df_staging_modificado = pd.DataFrame.from_records(datos_staging_lista)
+        resumen_kpis = _calculate_kpis(df_staging_modificado)
+        
+        # 8. Responder
+        return jsonify({
+            "status": "success", 
+            "message": f"Nueva fila añadida (ID: {nuevo_id}).",
+            "data": datos_staging_lista,
+            "history_count": len(history_stack),
+            "resumen": resumen_kpis,
+            "new_row_id": nuevo_id # ¡Devuelve el ID para el scroll! (Tu Punto 2)
+        })
+        
+    except Exception as e:
+        print(f"Error en /api/add_row: {e}") 
+        return jsonify({"error": str(e)}), 500
+
+# --- (API /api/delete_row sin cambios) ---
+@app.route('/api/delete_row', methods=['POST'])
+def delete_row():
+    """
+    Elimina una fila de 'df_staging' (basado en _row_id) y
+    guarda la fila eliminada en 'history' para poder deshacer.
+    """
+    try:
+        data = request.json
+        file_id = data.get('file_id')
+        row_id_to_delete = data.get('row_id')
+        _check_file_id(file_id)
+        
+        if row_id_to_delete is None:
+            return jsonify({"error": "Falta row_id"}), 400
+            
+        datos_staging_lista = _get_df_from_session('df_staging')
+        history_stack = session.get('history', [])
+        
+        fila_eliminada = None
+        nuevos_datos_staging = []
+        
+        for fila in datos_staging_lista:
+            if str(fila.get('_row_id')) == str(row_id_to_delete):
+                fila_eliminada = fila
+            else:
+                nuevos_datos_staging.append(fila)
+                
+        if not fila_eliminada:
+            return jsonify({"error": f"No se encontró la fila con _row_id {row_id_to_delete}"}), 404
+            
+        change_obj = {
+            'action': 'delete',
+            'deleted_row': fila_eliminada 
+        }
+        history_stack.append(change_obj)
+        if len(history_stack) > UNDO_STACK_LIMIT:
+            history_stack.pop(0)
+            
+        session['df_staging'] = nuevos_datos_staging
+        session['history'] = history_stack
+        
+        df_staging_modificado = pd.DataFrame.from_records(nuevos_datos_staging)
+        resumen_kpis = _calculate_kpis(df_staging_modificado)
+        
+        return jsonify({
+            "status": "success", 
+            "message": f"Fila {row_id_to_delete} eliminada.",
+            "data": nuevos_datos_staging, 
+            "history_count": len(history_stack),
+            "resumen": resumen_kpis 
+        })
+
+    except Exception as e:
+        print(f"Error en /api/delete_row: {e}") 
         return jsonify({"error": str(e)}), 500
 
 # --- (API /api/filter sin cambios) ---
@@ -429,6 +536,7 @@ def filter_data():
         _check_file_id(file_id)
         df_staging = _get_df_from_session_as_df('df_staging')
 
+        # ¡Usa la nueva lógica de 'aplicar_filtros_dinamicos' (v3)!
         resultado_df_filtrado = aplicar_filtros_dinamicos(df_staging, filtros_recibidos)
 
         resumen_stats = _calculate_kpis(resultado_df_filtrado)
@@ -444,12 +552,12 @@ def filter_data():
         print(f"Error en /api/filter: {e}") 
         return jsonify({"error": str(e)}), 500
 
-# --- ¡API DE DESCARGA DE EXCEL MODIFICADA! ---
+# --- ¡API DE DESCARGA DE EXCEL MODIFICADA! (Tu Punto 1) ---
 @app.route('/api/download_excel', methods=['POST'])
 def download_excel():
     """
     Descarga la vista detallada (filtrada) actual.
-    ¡AHORA incluye y renombra el N° de Fila Original!
+    ¡NUEVO! Renombra '_row_id' a 'N° Fila' y le suma 1.
     """
     try:
         data = request.json
@@ -458,16 +566,12 @@ def download_excel():
         columnas_visibles = data.get('columnas_visibles') 
 
         _check_file_id(file_id)
-        # Obtiene el "borrador" (staging) que incluye las ediciones del usuario
         df_staging = _get_df_from_session_as_df('df_staging')
 
-        # Aplica los filtros seleccionados
         resultado_df = aplicar_filtros_dinamicos(df_staging, filtros_recibidos)
         
         df_a_exportar = resultado_df
-        # Filtra por columnas visibles (si se proporcionaron)
         if columnas_visibles and isinstance(columnas_visibles, list):
-             # Asegurarnos de que _row_id esté siempre si existe
              if '_row_id' in resultado_df.columns and '_row_id' not in columnas_visibles:
                  columnas_visibles.append('_row_id')
                  
@@ -475,26 +579,24 @@ def download_excel():
              if columnas_existentes:
                  df_a_exportar = resultado_df[columnas_existentes]
 
-        # --- ¡NUEVO! Renombrar _row_id para la descarga ---
+        # --- ¡LÓGICA DE 'N° Fila' SIMPLIFICADA! (Tu Punto 1) ---
         if '_row_id' in df_a_exportar.columns:
-            # Suma 1 para que sea 1-indexed
-            df_a_exportar['_row_id'] = df_a_exportar['_row_id'] + 1
+            # Suma 1 a TODOS los IDs (ya sean originales o nuevos)
+            df_a_exportar['_row_id'] = df_a_exportar['_row_id'].astype(int) + 1
             # Renombra la columna
-            df_a_exportar = df_a_exportar.rename(columns={'_row_id': 'N° Fila Original'})
+            df_a_exportar = df_a_exportar.rename(columns={'_row_id': 'N° Fila'})
             
-            # Mover la columna al principio (opcional pero limpio)
+            # Mover la columna al principio
             cols = list(df_a_exportar.columns)
-            cols.insert(0, cols.pop(cols.index('N° Fila Original')))
+            cols.insert(0, cols.pop(cols.index('N° Fila')))
             df_a_exportar = df_a_exportar[cols]
         # --- Fin de la modificación ---
 
-        # Prepara el archivo Excel en memoria
         output_buffer = io.BytesIO()
         with pd.ExcelWriter(output_buffer, engine='xlsxwriter') as writer:
             df_a_exportar.to_excel(writer, sheet_name='Resultados', index=False)
         output_buffer.seek(0)
         
-        # Envía el archivo al usuario
         return send_file(
             output_buffer,
             as_attachment=True,

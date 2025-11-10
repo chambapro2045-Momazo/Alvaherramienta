@@ -40,22 +40,39 @@ def aplicar_filtros_dinamicos(df: pd.DataFrame, filtros: list) -> pd.DataFrame:
             continue
             
         try:
-            # Aseguramos que la columna sea texto para la búsqueda
-            columna_texto = resultado[columna].astype(str).str.lower()
+            # --- ¡LÓGICA MEJORADA PARA N° DE FILA! (Tu Punto 3) ---
+            if columna == '_row_id':
+                # El usuario busca por el N° Fila (ej. 144)
+                # El _row_id es 0-indexed (ej. 143)
+                # Convertimos los valores buscados a los IDs correctos (int)
+                ids_a_buscar = []
+                for v in valores:
+                    try:
+                        # Convierte el valor (ej "144") a int (144) y resta 1
+                        ids_a_buscar.append(int(v) - 1)
+                    except ValueError:
+                        pass # Ignora si el usuario escribe "abc"
+                
+                if not ids_a_buscar:
+                    continue # Pasa al siguiente filtro si no hay IDs válidos
+                
+                # Busca coincidencias EXACTAS usando .isin()
+                mascara_or_columna = resultado[columna].isin(ids_a_buscar)
+
+            else:
+                # --- Lógica normal (como antes) para otras columnas ---
+                # Aseguramos que la columna sea texto para la búsqueda
+                columna_texto = resultado[columna].astype(str).str.lower()
+                
+                mascara_or_columna = pd.Series([False] * len(resultado), index=resultado.index)
+                
+                for valor in valores:
+                    valor_lower = str(valor).lower()
+                    mascara_or_columna = mascara_or_columna | columna_texto.str.contains(valor_lower, case=False, na=False)
             
-            # --- Lógica OR dentro de la misma columna ---
-            # Creamos una "máscara" booleana (True/False por fila)
-            # Inicialmente, ninguna fila cumple la condición OR
-            mascara_or_columna = pd.Series([False] * len(resultado), index=resultado.index)
-            
-            for valor in valores:
-                valor_lower = str(valor).lower()
-                # Acumulamos con OR: si ya cumplía, sigue cumpliendo.
-                # Si no cumplía pero cumple ahora, se vuelve True.
-                mascara_or_columna = mascara_or_columna | columna_texto.str.contains(valor_lower, case=False, na=False)
-            
-            # Aplicamos la máscara OR para esta columna (esto actúa como AND con los filtros anteriores)
+            # Aplica la máscara (AND con los filtros anteriores)
             resultado = resultado[mascara_or_columna]
+            # --- FIN DE LA LÓGICA MEJORADA ---
 
         except KeyError:
              print(f"Advertencia: La columna '{columna}' especificada en un filtro no existe en el archivo.")

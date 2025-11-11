@@ -1,4 +1,4 @@
-# app.py (Versión 7.2 - Con ID Secuencial y Scroll)
+# app.py (Versión 7.6 - "Deshacer" con scroll a la fila)
 
 import os
 import pandas as pd
@@ -67,32 +67,93 @@ def _calculate_kpis(df: pd.DataFrame) -> dict:
         "monto_promedio": f"${monto_promedio:,.2f}"
     }
 
-# --- (Funciones cargar_listas_usuario, get_autocomplete_options sin cambios) ---
+# --- (Función cargar_listas_usuario sin cambios) ---
 def cargar_listas_usuario():
     """Carga las listas personalizadas desde user_autocomplete.json"""
     return cargar_json(USER_LISTS_FILE)
 
+# --- (Función get_autocomplete_options v7.5 sin cambios) ---
 def get_autocomplete_options(df: pd.DataFrame) -> dict:
     """
     Toma un DataFrame y genera las opciones de autocompletado
     fusionándolas con las listas guardadas por el usuario.
+    
+    ¡NUEVO! Esta lógica (v7.5) usa dict.get() para ser 100%
+    segura contra KeyErrors, incluso si el archivo JSON
+    no tiene las claves.
+
+    Args:
+        df (pd.DataFrame): El DataFrame del cual extraer los valores únicos.
+
+    Returns:
+        dict: Un diccionario donde la clave es el nombre REAL de la columna
+              del DataFrame (ej. "Pay Group") y el valor es la lista de opciones.
     """
-    listas_de_usuario = cargar_listas_usuario()
+    # 1. Carga las listas que el usuario haya guardado permanentemente.
+    #    (Garantizado por cargar_json() que esto es un dict).
+    listas_de_usuario = cargar_json(USER_LISTS_FILE)
+    
+    # 2. Prepara el diccionario de respuesta.
     autocomplete_options = {}
-    columnas_para_autocompletar = [
+
+    # 3. Define la lista "CANÓNICA" de columnas que queremos con autocompletado.
+    #    (Estos son los nombres "ideales" que buscaremos en el JSON).
+    columnas_target_canonicas = [
         "Vendor Name", "Status", "Assignee", 
-        "Operating Unit Name", "Pay Status", "Document Type", "_row_status"
+        "Operating Unit Name", "Pay Status", "Document Type", "_row_status",
+        "Pay group", "WEC Email Inbox", "Sender Email", 
+        "Currency Code", "payment method"
     ]
-    for col in columnas_para_autocompletar:
+    
+    # 4. Crea un mapa de las columnas *reales* del Excel (en minúsculas)
+    #    a su nombre real (con mayúsculas).
+    #    (Ej: {"pay group": "Pay Group", "status": "Status"})
+    df_cols_lower_map = {col.lower(): col for col in df.columns}
+
+    # 5. Itera sobre la lista "CANÓNICA" (nuestra lista de deseos).
+    for canonical_name in columnas_target_canonicas:
+        
+        # 6. Prepara el 'set' para combinar opciones para esta columna.
         opciones_combinadas = set()
-        if col in listas_de_usuario:
-            opciones_combinadas.update(listas_de_usuario[col])
-        if col in df.columns:
-            valores_unicos_excel = df[col].astype(str).unique()
-            opciones_limpias_excel = [val for val in valores_unicos_excel if val and pd.notna(val) and val.strip() != ""]
+        
+        # --- ¡LÓGICA DE CORRECCIÓN (INICIO)! ---
+        # 7. (Prioridad 1) Obtiene las listas del JSON de forma segura.
+        #    Usa .get() para buscar la lista. Si "Pay group" no existe
+        #    en el JSON, .get() devuelve 'None' (o una lista vacía).
+        #    Esto NUNCA lanzará un KeyError.
+        lista_guardada = listas_de_usuario.get(canonical_name)
+        
+        # 8. Si la lista guardada existe (no es None) y es una lista,
+        #    añade su contenido.
+        if isinstance(lista_guardada, list):
+            opciones_combinadas.update(lista_guardada)
+        # --- ¡LÓGICA DE CORRECCIÓN (FIN)! ---
+
+        # 9. (Prioridad 2) Busca la columna correspondiente en el Excel,
+        #    ignorando mayúsculas/minúsculas.
+        #    (Ej. busca "pay group" en el mapa de columnas del Excel).
+        df_col_name_real = df_cols_lower_map.get(canonical_name.lower())
+        
+        # 10. Si encontramos la columna en el Excel (ej. "Pay Group")...
+        if df_col_name_real:
+            # Escanea el DataFrame usando el nombre REAL (ej. "Pay Group").
+            valores_unicos_excel = df[df_col_name_real].astype(str).unique()
+            opciones_limpias_excel = [
+                val for val in valores_unicos_excel 
+                if val and pd.notna(val) and val.strip() != ""
+            ]
+            # Añade los valores del Excel al 'set'.
             opciones_combinadas.update(opciones_limpias_excel)
+        
+        # 11. Si al final tenemos opciones (del JSON o del Excel)...
         if opciones_combinadas:
-             autocomplete_options[col] = sorted(list(opciones_combinadas))
+            # 12. Asigna la lista de opciones al diccionario final.
+            #     Usamos el nombre real del Excel si existe, si no,
+            #     usamos el nombre canónico (para listas solo-JSON).
+            key_name = df_col_name_real if df_col_name_real else canonical_name
+            autocomplete_options[key_name] = sorted(list(opciones_combinadas))
+             
+    # 13. Devuelve el diccionario completo.
     return autocomplete_options
 
 # --- (Funciones _get_df_from_session, _get_df_from_session_as_df sin cambios) ---
@@ -306,14 +367,18 @@ def update_cell():
         print(f"Error en /api/update_cell: {e}") 
         return jsonify({"error": str(e)}), 500
 
-# --- (API /api/undo_change sin cambios) ---
+# --- ¡API /api/undo_change MODIFICADA! ---
 @app.route('/api/undo_change', methods=['POST'])
 def undo_change():
     """
     Deshace la última acción (update, add, o delete) de 'history'
     y la revierte en 'df_staging'.
+    
+    ¡NUEVO! (v7.6) Devuelve el 'affected_row_id' para que
+    el frontend pueda hacer scroll a la fila modificada.
     """
     try:
+        # --- (Inicio de la función sin cambios) ---
         data = request.json
         file_id = data.get('file_id')
         _check_file_id(file_id)
@@ -326,8 +391,15 @@ def undo_change():
         action_type = last_action.get('action')
         
         datos_staging_lista = _get_df_from_session('df_staging')
+        # --- (Fin de la parte sin cambios) ---
+        
+        # --- ¡INICIO DEL CAMBIO (v7.6)! ---
+        # 1. Declara una variable para guardar el ID afectado.
+        affected_row_id = None
+        # --- FIN DEL CAMBIO ---
         
         if action_type == 'update':
+            # --- (Lógica de 'update' sin cambios) ---
             row_id_to_revert = last_action.get('row_id')
             col_to_revert = last_action.get('columna')
             value_to_restore = last_action.get('old_val') 
@@ -340,33 +412,54 @@ def undo_change():
                     break
             if not fila_revertida:
                 raise Exception(f"Error de consistencia: no se encontró la fila {row_id_to_revert} para deshacer update.")
+            
+            # --- ¡INICIO DEL CAMBIO (v7.6)! ---
+            # 2. Guarda el ID de la fila que acabamos de revertir.
+            affected_row_id = row_id_to_revert
+            # --- FIN DEL CAMBIO ---
 
         elif action_type == 'add':
+            # --- (Lógica de 'add' sin cambios) ---
             row_id_to_remove = last_action.get('row_id')
             datos_staging_lista = [fila for fila in datos_staging_lista if str(fila.get('_row_id')) != str(row_id_to_remove)]
             
+            # (No asignamos affected_row_id aquí porque la fila se elimina,
+            # no podemos hacer scroll a ella).
+            
         elif action_type == 'delete':
+            # --- (Lógica de 'delete' sin cambios) ---
             row_to_restore = last_action.get('deleted_row')
             if not row_to_restore:
                 raise Exception("Error de consistencia: no se encontró 'deleted_row' para deshacer delete.")
             datos_staging_lista.append(row_to_restore)
+
+            # --- ¡INICIO DEL CAMBIO (v7.6)! ---
+            # 3. Obtiene el ID de la fila que acabamos de restaurar.
+            affected_row_id = row_to_restore.get('_row_id')
+            # --- FIN DEL CAMBIO ---
             
         else:
             raise Exception(f"Tipo de acción desconocida en el historial: {action_type}")
         
+        # --- (Lógica de guardado en sesión sin cambios) ---
         session['history'] = history_stack
         session['df_staging'] = datos_staging_lista
         
         df_staging_revertido = pd.DataFrame.from_records(datos_staging_lista)
         resumen_kpis = _calculate_kpis(df_staging_revertido)
+        # --- (Fin de la parte sin cambios) ---
         
+        # --- ¡INICIO DEL CAMBIO (v7.6)! ---
+        # 4. Devuelve el JSON, añadiendo la nueva clave 'affected_row_id'.
         return jsonify({
             "status": "success",
             "message": f"Acción '{action_type}' deshecha.",
             "data": datos_staging_lista, 
             "history_count": len(history_stack),
-            "resumen": resumen_kpis
+            "resumen": resumen_kpis,
+            "affected_row_id": affected_row_id # ¡Devuelve el ID!
         })
+        # --- FIN DEL CAMBIO ---
 
     except Exception as e:
         print(f"Error en /api/undo_change: {e}") 
@@ -397,7 +490,7 @@ def commit_changes():
         print(f"Error en /api/commit_changes: {e}") 
         return jsonify({"error": str(e)}), 500
 
-# --- ¡API /api/add_row MODIFICADA! (Tu Punto 1 y 2) ---
+# --- (API /api/add_row sin cambios) ---
 @app.route('/api/add_row', methods=['POST'])
 def add_row():
     """
@@ -552,7 +645,7 @@ def filter_data():
         print(f"Error en /api/filter: {e}") 
         return jsonify({"error": str(e)}), 500
 
-# --- ¡API DE DESCARGA DE EXCEL MODIFICADA! (Tu Punto 1) ---
+# --- (API /api/download_excel sin cambios) ---
 @app.route('/api/download_excel', methods=['POST'])
 def download_excel():
     """

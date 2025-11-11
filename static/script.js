@@ -1,10 +1,12 @@
-// script.js (Versión 7.17 - Corrección de Persistencia de Filtro)
+// script.js (Versión 7.26 - Corrección de Scroll en Deshacer)
 // NOTA:
-// 1. (¡EL BUG!) Corregidas 'handleAddRow', 'handleDeleteRow' y 'handleUndoChange'.
-//    En lugar de llamar a 'renderTable(result.data)' (que ignora los filtros),
-//    ahora llaman a 'await getFilteredData()'.
-// 2. Esto fuerza a la aplicación a re-aplicar los filtros activos
-//    después de cualquier acción de edición de fila, solucionando el bug.
+// 1. Se corrige el problema de "scroll-to-top" al deshacer.
+// 2. El 'setTimeout(..., 100)' en 'handleUndoChange' era
+//    inseguro (una condición de carrera).
+// 3. Se reemplaza con un listener de evento 'renderComplete' de un solo uso.
+//    Esto GARANTIZA que el scroll solo se intente DESPUÉS de que
+//    Tabulator haya terminado de redibujar la tabla,
+//    solucionando el bug de forma robusta.
 
 // --- Variable global para traducciones ---
 let i18n = {}; 
@@ -26,16 +28,18 @@ let autocompleteOptions = {};
 let tabulatorInstance = null;
 let groupedTabulatorInstance = null; 
 
+// (Columnas agrupables sin cambios)
 const COLUMNAS_AGRUPABLES = [
     "Vendor Name", "Status", "Assignee", 
-    "Operating Unit Name", "Pay Status", "Document Type", "_row_status"
+    "Operating Unit Name", "Pay Status", "Document Type", "_row_status",
+    "Pay group", "WEC Email Inbox", "Sender Email", "Currency Code", "payment method"
 ];
 
 // ---
 // SECCIÓN 1: MANEJO DE COLUMNAS (Sin cambios)
 // ---
 function renderColumnSelector() {
-    // ... (Sin cambios desde v7.16) ...
+    // ... (Sin cambios desde v7.25) ...
     const wrapper = document.getElementById('column-selector-wrapper');
     if (!wrapper) return;
     wrapper.innerHTML = ''; 
@@ -56,7 +60,7 @@ function renderColumnSelector() {
     });
 }
 function updateVisibleColumnsFromCheckboxes() {
-    // ... (Sin cambios desde v7.16) ...
+    // ... (Sin cambios desde v7.25) ...
     const checkboxes = document.querySelectorAll('#column-selector-wrapper input[type="checkbox"]');
     columnasVisibles = [];
     checkboxes.forEach(cb => {
@@ -74,13 +78,13 @@ function handleColumnVisibilityChange(event) {
     updateVisibleColumnsFromCheckboxes();
 }
 function handleCheckAllColumns() {
-    // ... (Sin cambios desde v7.16) ...
+    // ... (Sin cambios desde v7.25) ...
     const checkboxes = document.querySelectorAll('#column-selector-wrapper input[type="checkbox"]');
     checkboxes.forEach(cb => cb.checked = true);
     updateVisibleColumnsFromCheckboxes();
 }
 function handleUncheckAllColumns() {
-    // ... (Sin cambios desde v7.16) ...
+    // ... (Sin cambios desde v7.25) ...
     const checkboxes = document.querySelectorAll('#column-selector-wrapper input[type="checkbox"]');
     checkboxes.forEach(cb => cb.checked = false);
     updateVisibleColumnsFromCheckboxes();
@@ -89,7 +93,7 @@ function handleUncheckAllColumns() {
 // SECCIÓN 2: CONFIGURACIÓN INICIAL Y LISTENERS (Sin cambios)
 // ---
 async function loadTranslations() {
-    // ... (Sin cambios desde v7.16) ...
+    // ... (Sin cambios desde v7.25) ...
     try {
         const response = await fetch('/api/get_translations');
         if (!response.ok) throw new Error('Network response was not ok');
@@ -102,7 +106,7 @@ async function loadTranslations() {
 }
 
 function setupEventListeners() {
-    // ... (Sin cambios desde v7.16) ...
+    // ... (Sin cambios desde v7.25) ...
     const fileUploader = document.getElementById('file-uploader');
     const dragDropArea = document.querySelector('.drag-drop-label');
     const btnAdd = document.getElementById('btn-add-filter');
@@ -179,7 +183,7 @@ function setupEventListeners() {
     }
 }
 function updateDynamicText() {
-    // ... (Sin cambios desde v7.16) ...
+    // ... (Sin cambios desde v7.25) ...
     const valInput = document.getElementById('input-valor');
     const searchTableInput = document.getElementById('input-search-table');
     const resultsTableDiv = document.getElementById('results-table');
@@ -196,7 +200,7 @@ function updateDynamicText() {
     }
 }
 async function setLanguage(langCode) {
-    // ... (Sin cambios desde v7.16) ...
+    // ... (Sin cambios desde v7.25) ...
     try { 
         await fetch(`/api/set_language/${langCode}`); 
         location.reload();
@@ -208,7 +212,7 @@ async function setLanguage(langCode) {
 // ---
 
 async function handleFileUpload(event) {
-    // ... (Sin cambios desde v7.16) ...
+    // ... (Sin cambios desde v7.25) ...
     const file = event.target.files[0]; if (!file) return;
     const fileUploadList = document.getElementById('file-upload-list');
     const fileSizeMB = (file.size / (1024 * 1024)).toFixed(1);
@@ -269,7 +273,7 @@ async function handleFileUpload(event) {
 }
 
 async function handleAddFilter() {
-    // ... (Sin cambios desde v7.16) ...
+    // ... (Sin cambios desde v7.25) ...
     const colSelect = document.getElementById('select-columna');
     const valInput = document.getElementById('input-valor');
     const col = colSelect.value; 
@@ -287,7 +291,7 @@ async function handleAddFilter() {
 }
 
 async function handleClearFilters() { 
-    // ... (Sin cambios desde v7.16) ...
+    // ... (Sin cambios desde v7.25) ...
     activeFilters = []; 
     if (currentView === 'detailed') {
         document.getElementById('input-search-table').value = ''; 
@@ -296,7 +300,7 @@ async function handleClearFilters() {
 }
 
 async function handleRemoveFilter(event) {
-    // ... (Sin cambios desde v7.16) ...
+    // ... (Sin cambios desde v7.25) ...
     if (!event.target.classList.contains('remove-filter-btn')) return;
     const indexToRemove = parseInt(event.target.dataset.index, 10);
     activeFilters.splice(indexToRemove, 1);
@@ -304,7 +308,7 @@ async function handleRemoveFilter(event) {
 }
 
 function handleFullscreen(event) {
-    // ... (Sin cambios desde v7.16) ...
+    // ... (Sin cambios desde v7.25) ...
     const viewContainerId = (currentView === 'detailed') 
         ? 'view-container-detailed' 
         : 'view-container-grouped';
@@ -348,7 +352,7 @@ function handleFullscreen(event) {
 }
 
 function handleSearchTable() {
-    // ... (Sin cambios desde v7.16) ...
+    // ... (Sin cambios desde v7.25) ...
     const searchTableInput = document.getElementById('input-search-table');
     const searchTerm = searchTableInput.value.toLowerCase();
     
@@ -380,7 +384,7 @@ function handleSearchTable() {
 
 
 async function handleDownloadExcel() {
-    // ... (Sin cambios desde v7.16) ...
+    // ... (Sin cambios desde v7.25) ...
     if (!currentFileId) { 
         alert(i18n['no_data_to_download'] || "No hay datos para descargar."); 
         return; 
@@ -416,7 +420,7 @@ async function handleDownloadExcel() {
 }
 
 async function handleDownloadExcelGrouped() {
-    // ... (Sin cambios desde v7.16) ...
+    // ... (Sin cambios desde v7.25) ...
     const select = document.getElementById('select-columna-agrupar');
     const colAgrupar = select ? select.value : null;
 
@@ -455,7 +459,7 @@ async function handleDownloadExcelGrouped() {
     }
 }
 
-// --- (handleManageLists sin cambios desde v7.16) ---
+// --- (handleManageLists sin cambios desde v7.25) ---
 async function handleManageLists() {
     // ... (Esta es la función de "Añadir/Quitar con -") ...
     
@@ -531,12 +535,12 @@ async function handleManageLists() {
 }
 
 // ---
-// --- FUNCIONES DE EDICIÓN (¡MODIFICADAS!) ---
+// --- FUNCIONES DE EDICIÓN ---
 // ---
 
 /**
  * @description Llama a la API para AÑADIR una nueva fila en blanco.
- * ¡MODIFICADO! (Tu Bug) Llama a 'await getFilteredData()' en lugar de 'renderTable'.
+ * (Sin cambios desde v7.25)
  */
 async function handleAddRow() {
     if (!currentFileId) {
@@ -590,7 +594,7 @@ async function handleAddRow() {
 
 /**
  * @description Llama a la API para ELIMINAR una fila específica.
- * ¡MODIFICADO! (Tu Bug) Llama a 'await getFilteredData()' en lugar de 'renderTable'.
+ * (Sin cambios desde v7.25)
  */
 async function handleDeleteRow(row_id) {
     if (!currentFileId) {
@@ -632,45 +636,115 @@ async function handleDeleteRow(row_id) {
 
 /**
  * @description Llama a la API para DESHACER el último cambio.
- * ¡MODIFICADO! (Tu Bug) Llama a 'await getFilteredData()' en lugar de 'renderTable'.
+ * ¡FUNCIÓN MODIFICADA (v7.26) para un scroll robusto!
  */
 async function handleUndoChange() {
+    // (Documentación de Google: Inicio de la función)
+    // Propósito: Deshace la última acción del usuario
+    // (update, add, delete) llamando al backend,
+    // y luego actualiza la vista, asegurando que el scroll
+    // se mueva a la fila afectada.
+    // (Fin de la documentación de Google)
+
+    // 1. (Sin cambios) Verificaciones iniciales.
     if (undoHistoryCount === 0 || !currentFileId) {
+        // Si no hay historial o no hay archivo, no hace nada.
         alert("No hay nada que deshacer.");
         return;
     }
     console.log("Deshaciendo último cambio...");
     
     try {
+        // 2. (Sin cambios) Llama a la API de deshacer del backend.
         const response = await fetch('/api/undo_change', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ file_id: currentFileId })
+            method: 'POST', // Método HTTP
+            headers: { 'Content-Type': 'application/json' }, // Tipo de contenido
+            body: JSON.stringify({ file_id: currentFileId }) // Envía el file_id
         });
 
+        // 3. (Sin cambios) Obtiene el resultado (que incluye 'affected_row_id').
         const result = await response.json();
+        // Si la respuesta no fue exitosa (ej. 404, 500), lanza un error.
         if (!response.ok) throw new Error(result.error);
         
-        console.log(result.message);
+        console.log(result.message); // Muestra ej. "Acción 'update' deshecha."
         
-        // 1. Actualiza el contador de deshacer
+        // 4. (Sin cambios) Actualiza el contador de deshacer en la UI.
         undoHistoryCount = result.history_count;
-        updateActionButtonsVisibility(); 
+        updateActionButtonsVisibility(); // Actualiza los botones (ej. "Deshacer (2)")
 
-        // --- ¡AQUÍ ESTÁ EL ARREGLO! (Tu Bug) ---
-        // 2. Llama a getFilteredData() para repintar CON los filtros
+        // 5. (Sin cambios) Llama a getFilteredData().
+        // Esta función llama a /api/filter (que obtiene los datos actualizados
+        // de la sesión), y luego llama a renderTable() para redibujar
+        // la tabla, APLICANDO los filtros activos actualmente.
         await getFilteredData();
-        // --- FIN DEL ARREGLO ---
+        
+        // --- ¡INICIO DE LA CORRECCIÓN (v7.26)! ---
+        // Reemplaza el 'setTimeout' inseguro por un listener de evento robusto.
+        
+        // 6. (Sin cambios) Comprueba si el backend nos envió un ID de fila
+        //    y si la instancia de Tabulator existe.
+        if (result.affected_row_id && tabulatorInstance) {
+            
+            // 7. (Sin cambios) Guarda el ID de la fila afectada.
+            const rowId = result.affected_row_id;
+            console.log("Deshacer completado, programando scroll a la fila:", rowId);
+
+            // 8. ¡NUEVA LÓGICA! Define una función de 'callback' de un solo uso.
+            //    Esta función se ejecutará UNA VEZ cuando Tabulator
+            //    dispare el evento 'renderComplete'.
+            const scrollOnce = () => {
+                // 8a. DESCONECTA el listener.
+                //     Esto es crucial para que no se ejecute
+                //     en *cada* renderizado futuro, solo en este.
+                tabulatorInstance.off("renderComplete", scrollOnce);
+
+                console.log("Renderizado completo, intentando scroll a:", rowId);
+                
+                // 8b. EJECUTA EL SCROLL.
+                //     Usamos .scrollToRow() que devuelve una promesa.
+                tabulatorInstance.scrollToRow(rowId, "center", false)
+                .then(() => {
+                    // 8c. (Éxito) La fila se encontró e hizo scroll.
+                    //     Ahora aplica el resaltado.
+                    const row = tabulatorInstance.getRow(rowId);
+                    if (row) {
+                        // Resalta la fila en amarillo.
+                        row.getElement().style.backgroundColor = "#FFF9E5"; 
+                        // Quita el resaltado después de 2 segundos.
+                        setTimeout(() => {
+                            row.getElement().style.backgroundColor = ""; 
+                        }, 2000);
+                    }
+                })
+                .catch((err) => {
+                    // 8d. (Fallo) El scroll falló.
+                    //     Esto es normal si la fila (ej. 133) está
+                    //     actualmente oculta por un filtro.
+                    console.warn(`Falló el scroll a la fila ${rowId} (quizás está filtrada):`, err);
+                });
+            };
+            
+            // 9. ¡NUEVA LÓGICA! CONECTA el listener.
+            //    Le decimos a Tabulator: "Cuando termines de renderizar
+            //    lo que te mandó 'getFilteredData', ejecuta 'scrollOnce'".
+            tabulatorInstance.on("renderComplete", scrollOnce);
+
+            // 10. (Eliminado) Se elimina el antiguo 'setTimeout(..., 100)'.
+        }
+        // --- FIN DE LA CORRECCIÓN (v7.26) ---
 
     } catch (error) {
+        // (Sin cambios) Captura de errores (ej. si la API falla).
         console.error("Error al deshacer el cambio:", error);
         alert("Error al deshacer: " + error.message);
     }
 }
 
+
 /**
  * @description Llama a la API para CONSOLIDAR los cambios.
- * (Sin cambios)
+ * (Sin cambios desde v7.25)
  */
 async function handleCommitChanges() {
     if (!confirm("¿Estás seguro de que quieres consolidar todos los cambios?\n\nEsta acción guardará el estado actual y limpiará el historial de deshacer.")) {
@@ -706,14 +780,14 @@ async function handleCommitChanges() {
 
 
 // ---
-// SECCIÓN 4: LÓGICA DE DATOS Y RENDERIZADO (¡MODIFICADO!)
+// SECCIÓN 4: LÓGICA DE DATOS Y RENDERIZADO (Sin cambios)
 // ---
 
 /**
  * @description Actualiza las tarjetas de KPI con nuevos datos.
  */
 function updateResumenCard(resumen_data) {
-    // ... (Sin cambios desde v7.16) ...
+    // ... (Sin cambios desde v7.25) ...
     if (!resumen_data) return; 
     
     const totalFacturas = document.getElementById('resumen-total-facturas');
@@ -728,7 +802,7 @@ function updateResumenCard(resumen_data) {
 }
 
 function resetResumenCard() {
-    // ... (Sin cambios desde v7.16) ...
+    // ... (Sin cambios desde v7.25) ...
     updateResumenCard({
         total_facturas: '0',
         monto_total: '$0.00',
@@ -738,7 +812,7 @@ function resetResumenCard() {
 
 
 function renderFilters() {
-    // ... (Sin cambios desde v7.16) ...
+    // ... (Sin cambios desde v7.25) ...
     const listId = (currentView === 'detailed') ? 'active-filters-list' : 'active-filters-list-grouped';
     const clearBtnId = (currentView === 'detailed') ? 'btn-clear-filters' : 'btn-clear-filters-grouped';
     
@@ -775,24 +849,27 @@ function renderFilters() {
 
 /**
  * @description Renderiza la tabla DETALLADA.
- * (Sin cambios)
+ * (Sin cambios desde v7.25)
  */
 function renderTable(data = null, forceClear = false) {
+    // 1. Obtiene el contenedor de la tabla.
     const resultsTableDiv = document.getElementById('results-table');
-
     if (!resultsTableDiv) {
         console.error("ERROR: No se encontró el div '#results-table'.");
         return; 
     }
 
+    // 2. Limpia la instancia si es necesario (ej. al cargar archivo).
     if (forceClear && tabulatorInstance) {
         console.log("Tabulator (Detallada): Destruyendo instancia.");
         tabulatorInstance.destroy();
         tabulatorInstance = null;
     }
     
+    // 3. Define qué datos usar.
     const dataToRender = data || tableData;
 
+    // 4. Maneja el estado sin archivo cargado.
     if (!currentFileId) { 
         if (tabulatorInstance) {
             tabulatorInstance.destroy();
@@ -801,10 +878,24 @@ function renderTable(data = null, forceClear = false) {
         resultsTableDiv.innerHTML = `<p>${i18n['info_upload'] || 'Upload file'}</p>`; 
         return; 
     }
+    
+    // --- 5. Definir las Columnas de Fecha (Sin cambios) ---
+    const dateColumns = new Set([
+        "Invoice Date",
+        "Intake Date",
+        "Assigned Date",
+        "Due Date",
+        "Terms Date",
+        "GL Date",
+        "Updated Date",
+        "Batch Matching Date"
+    ]);
+    // --- FIN DE LA DEFINICIÓN DE FECHAS ---
+    
 
-    // --- 1. Definir las Columnas (Sin cambios desde v7.16) ---
+    // --- 6. Definir las Columnas de la Tabla ---
     const columnDefs = [
-        // Columna de Eliminar
+        // Columna de Eliminar (Sin cambios)
         {
             title: "", 
             field: "delete",
@@ -824,7 +915,7 @@ function renderTable(data = null, forceClear = false) {
                 handleDeleteRow(rowId);
             }
         },
-        // Columna de N° Fila
+        // Columna de N° Fila (Sin cambios)
         {
             title: "N°",
             field: "_row_id", 
@@ -838,44 +929,121 @@ function renderTable(data = null, forceClear = false) {
         }
     ];
 
-    // Añade el resto de las columnas
+
+    // 7. Añade dinámicamente el resto de las columnas visibles.
     columnasVisibles.forEach(colName => {
+        // Omite '_row_id' porque ya se añadió manualmente.
         if (colName === '_row_id') {
-            return; // Ya la definimos arriba
+            return; 
         }
 
+        // Define el título (ej. '_row_status' -> 'Row Status').
         const colTitle = (colName === '_row_status') ? "Row Status" : colName;
         
+        // --- INICIO DE LA LÓGICA DEL EDITOR (¡MODIFICADO!) ---
+        
+        // Por defecto, un editor de texto simple.
         let editorType = "input"; 
         let editorParams = {};
         
-        if (autocompleteOptions && autocompleteOptions[colName] && autocompleteOptions[colName].length > 0) {
+        let formatter = undefined;       // Sin formateador por defecto.
+        let mutatorEdit = undefined;   // Sin mutator por defecto.
+        
+        // --- REGLA 1: Columnas de Fecha (¡LÓGICA MEJORADA v7.25!) ---
+        if (dateColumns.has(colName)) {
+            
+            editorType = "date";
+            
+            // 'mutatorEdit' prepara el valor para el editor.
+            mutatorEdit = function(value, data, type, params, component) {
+                // --- ¡NUEVA GUARDA (v7.25)! ---
+                // Si 'value' es Falsy (null, undefined, "", 0),
+                // devuelve null inmediatamente.
+                if (!value) {
+                    return null;
+                }
+                // Si SÍ tiene un valor, comprueba si tiene .split
+                if (typeof value.split === 'function') {
+                    // (ej. "2024-10-25 14:30:00" -> "2024-10-25")
+                    return value.split(" ")[0];
+                }
+                // Si es un número o algo raro, devuélvelo tal cual
+                // (aunque el editor 'date' probablemente no lo entienda,
+                // pero al menos no crashea el script).
+                return value; 
+            }
+            
+            // 'formatter' limpia cómo se ve la fecha en la tabla.
+            formatter = function(cell, formatterParams, onRendered) {
+                const value = cell.getValue();
+                // --- ¡NUEVA GUARDA (v7.25)! ---
+                // Si 'value' es Falsy, devuelve "".
+                if (!value) {
+                    return "";
+                }
+                // Si SÍ tiene un valor, comprueba si tiene .split
+                if (typeof value.split === 'function') {
+                    // (ej. "2024-10-25 14:30:00" -> "2024-10-25")
+                    return value.split(" ")[0];
+                }
+                // Si es un número o algo raro, muéstralo
+                return value;
+            }
+        }
+        
+        // --- REGLA 2: 'Sender Email' (Sin cambios) ---
+        else if (colName === 'Sender Email') {
+            
+            editorType = "autocomplete";
+            const options = (autocompleteOptions && autocompleteOptions[colName]) 
+                ? autocompleteOptions[colName] 
+                : [];
+                
+            editorParams = {
+                values: options,
+                showListOnEmpty: true,
+                freetext: true 
+            };
+        } 
+        
+        // --- REGLA 3: Otras columnas con autocompletado (Sin cambios) ---
+        else if (autocompleteOptions && autocompleteOptions[colName] && autocompleteOptions[colName].length > 0) {
+            
             const options = autocompleteOptions[colName];
             
             if (options.length > 50) {
                 editorType = "autocomplete";
                 editorParams = {
-                    values: options, showListOnEmpty: true, freetext: true,
+                    values: options,
+                    showListOnEmpty: true,
+                    freetext: true,
                 };
             } else {
                 editorType = "select";
-                editorParams = { values: ["", ...options] };
+                editorParams = { 
+                    values: ["", ...options]
+                };
             }
         }
+        // --- FIN DE LA LÓGICA DEL EDITOR ---
 
+        // 8. Añade la definición de la columna a la lista.
         columnDefs.push({
             title: colTitle,
             field: colName,
-            editor: editorType,          
-            editorParams: editorParams,  
+            editor: editorType,
+            editorParams: editorParams,
+            mutatorEdit: mutatorEdit, // Asigna el mutator
+            formatter: formatter,     // Asigna el formateador
             minWidth: 150, 
             visible: true, 
         });
     });
+    // --- FIN DE LA DEFINICIÓN DE COLUMNAS ---
 
-    // --- 2. Comprobar si la instancia ya existe ---
+
+    // --- 9. Comprobar si la instancia ya existe ---
     if (tabulatorInstance) {
-        // ... (Sin cambios) ...
         console.log("Tabulator (Detallada): Actualizando datos...");
         tabulatorInstance.setColumns(columnDefs); 
         tabulatorInstance.setData(dataToRender);
@@ -888,36 +1056,56 @@ function renderTable(data = null, forceClear = false) {
         }
 
     } else {
-        // --- 3. Crear la NUEVA instancia de Tabulator ---
-        // ... (Sin cambios) ...
+        // --- 10. Crear la NUEVA instancia de Tabulator ---
         console.log("Tabulator (Detallada): Creando nueva instancia...");
         
         tabulatorInstance = new Tabulator(resultsTableDiv, {
             virtualDom: true, 
             height: "65vh",   
             data: dataToRender, 
-            columns: columnDefs,
+            columns: columnDefs, 
             layout: "fitData", 
             movableColumns: true,
             placeholder: `<p>${i18n['info_upload'] || 'Upload file'}</p>`,
         });
 
-        // --- 4. LISTENER DE EDICIÓN (Sin cambios) ---
+        // --- 11. LISTENER DE EDICIÓN (Sin cambios, v7.21) ---
+        // Este listener se activa DESPUÉS de que el usuario edita una celda.
         tabulatorInstance.on("cellEdited", async function(cell){
             
+            // Obtiene los datos del cambio.
             const newValue = cell.getValue();
+            const oldValue = cell.getOldValue(); 
             const colField = cell.getField();
             const rowData = cell.getRow().getData();
             const rowId = rowData._row_id; 
 
-            if (newValue === cell.getOldValue()) {
+            // --- LÓGICA DE CORRECCIÓN (v7.21) ---
+            
+            // 1. Detectar un "cancel" (clic-afuera) en el editor de fecha.
+            if (dateColumns.has(colField) && 
+                (newValue === null || newValue === "") && 
+                (oldValue !== null && oldValue !== "")) 
+            {
+                console.log("Cancelación de editor de fecha detectada. Revirtiendo.");
+                cell.restoreOldValue(); 
                 return; 
             }
+            
+            // 2. Comprobar si el valor realmente cambió.
+            if (newValue === oldValue) {
+                console.log("El valor no cambió. No se guarda.");
+                return; 
+            }
+            // --- FIN DE LA LÓGICA DE CORRECCIÓN ---
 
+
+            // 3. Si llegamos aquí, es un cambio real y válido.
             console.log(`Guardando... Fila ID: ${rowId}, Col: ${colField}, Nuevo Valor: ${newValue}`);
             cell.getRow().getElement().style.backgroundColor = "#FFF9E5"; 
             
             try {
+                // Llama a la API del backend para guardar el cambio.
                 const response = await fetch('/api/update_cell', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -942,6 +1130,7 @@ function renderTable(data = null, forceClear = false) {
                 updateActionButtonsVisibility();
 
             } catch (error) {
+                // Si la API falla, revierte el cambio en el frontend.
                 console.error("Error al guardar celda:", error);
                 alert("Error al guardar el cambio: " + error.message + "\n\nEl cambio será revertido localmente.");
                 cell.restoreOldValue();
@@ -957,14 +1146,14 @@ function renderTable(data = null, forceClear = false) {
 
 
 // ---
-// SECCIÓN 5: LÓGICA DE VISTAS (¡MODIFICADO!)
+// SECCIÓN 5: LÓGICA DE VISTAS (Sin cambios)
 // ---
 
 /**
  * @description Muestra/Oculta "Deshacer", "Consolidar" y "Añadir Fila".
  */
 function updateActionButtonsVisibility() {
-    // ... (Sin cambios desde v7.16) ...
+    // ... (Sin cambios desde v7.25) ...
     const btnUndo = document.getElementById('btn-undo-change');
     const btnCommit = document.getElementById('btn-commit-changes');
     const btnAddRow = document.getElementById('btn-add-row'); 
@@ -989,7 +1178,7 @@ function updateActionButtonsVisibility() {
 
 
 async function refreshActiveView() {
-    // ... (Sin cambios desde v7.16) ...
+    // ... (Sin cambios desde v7.25) ...
     if (currentView === 'detailed') {
         renderGroupedTable(null, null, true); 
         await getFilteredData(); 
@@ -1004,10 +1193,10 @@ async function refreshActiveView() {
 
 /**
  * @description Llama a /api/filter y actualiza los KPIs
- * (Corregido el bug de repintado)
+ * (Sin cambios desde v7.25)
  */
 async function getFilteredData() {
-    // ... (Sin cambios desde v7.16) ...
+    // ... (Sin cambios desde v7.25) ...
     const resultsHeader = document.getElementById('results-header');
     
     if (!currentFileId) { 
@@ -1043,6 +1232,7 @@ async function getFilteredData() {
         if (resultsHeader) resultsHeader.textContent = i18n['results_header']?.replace('{num_filas}', result.num_filas) || `Results (${result.num_filas})`;
 
     } catch (error) { 
+        // ... (Sin cambios desde v7.25) ...
         console.error('Error en fetch /api/filter:', error); 
         alert('Error al filtrar: ' + error.message);
         resetResumenCard(); 
@@ -1052,7 +1242,7 @@ async function getFilteredData() {
 
 
 async function getGroupedData() {
-    // ... (Sin cambios desde v7.16) ...
+    // ... (Sin cambios desde v7.25) ...
     const select = document.getElementById('select-columna-agrupar');
     const colAgrupar = select ? select.value : null;
 
@@ -1090,7 +1280,7 @@ async function getGroupedData() {
 }
 
 function toggleView(view, force = false) {
-    // ... (Sin cambios desde v7.16) ...
+    // ... (Sin cambios desde v7.25) ...
     if (view === currentView && !force) return; 
 
     currentView = view;
@@ -1141,13 +1331,14 @@ function toggleView(view, force = false) {
 }
 
 function populateGroupDropdown() {
-    // ... (Sin cambios desde v7.16) ...
+    // ... (Sin cambios desde v7.25) ...
     const select = document.getElementById('select-columna-agrupar');
     if (!select) return; 
     
     const valorActual = select.value;
     select.innerHTML = `<option value="">${i18n['group_by_placeholder'] || 'Select column...'}</option>`;
 
+    // Filtra usando la constante COLUMNAS_AGRUPABLES
     const opcionesValidas = COLUMNAS_AGRUPABLES.filter(col => 
         todasLasColumnas.includes(col) && col !== '_row_id'
     );
@@ -1159,7 +1350,10 @@ function populateGroupDropdown() {
         select.appendChild(option);
     });
 
-    select.value = valorActual;
+    // Intenta restaurar el valor si todavía es válido.
+    if (opcionesValidas.includes(valorActual)) {
+        select.value = valorActual;
+    }
 }
 
 async function handleGroupColumnChange() {
@@ -1167,7 +1361,7 @@ async function handleGroupColumnChange() {
 }
 
 function renderGroupedTable(data, colAgrupada, forceClear = false) {
-    // ... (Sin cambios desde v7.16) ...
+    // ... (Sin cambios desde v7.25) ...
     const resultsTableDiv = document.getElementById('results-table-grouped');
     if (!resultsTableDiv) {
          console.error("ERROR: No se encontró el div '#results-table-grouped'.");
@@ -1236,7 +1430,7 @@ function renderGroupedTable(data, colAgrupada, forceClear = false) {
 }
 
 /**
- * @description ¡MODIFICADO! (Tu Punto 3)
+ * @description (Sin cambios desde v7.25)
  * Añade "N° Fila" (_row_id) al dropdown de filtros.
  */
 function populateColumnDropdowns() {

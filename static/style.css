@@ -406,14 +406,22 @@ button {
 
 /* --- 6. La Tabla (¡SOLUCIÓN SCROLL!) --- */
 
-/* * ¡REGLA ELIMINADA! 
- * La regla '.table-container-flotante' ha sido eliminada por completo.
- * Tabulator crea su propio contenedor con su propia altura y scroll.
- * Forzar un 'overflow' y 'height' en un 'div' padre (como
- * 'table-container-flotante' lo hacía) rompe el layout de Tabulator.
- * La altura ahora se define en la configuración de Tabulator en 'script.js'.
- */
-/* Mensaje "Cargue un archivo..." */
+/* (Documentación de Google)
+Propósito: Define la altura base de los contenedores de la tabla.
+Esta regla REEMPLAZA la propiedad 'height: "65vh"' que eliminamos
+del constructor de Tabulator en 'script.js' (v7.31).
+Ahora, el CSS controla la altura en la vista de ventana, y las
+reglas de '.in-fullscreen' (que ya deberías tener)
+controlarán la altura en pantalla completa.
+*/
+.table-container-flotante {
+    position: relative;
+    flex-grow: 1;
+    min-height: 0;
+    
+    /* ¡ESTA ES LA LÍNEA NUEVA (o que debes verificar)! */
+    height: 65vh; 
+}
 
 /* * ¡NUEVO! Estilos para Tabulator
  * Esto asegura que la tabla se integre con tu diseño.

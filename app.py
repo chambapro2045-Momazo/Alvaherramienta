@@ -1,4 +1,4 @@
-# app.py (Versión 7.6 - "Deshacer" con scroll a la fila)
+# app.py (Versión 7.7 - Restaurar fila en la posición original)
 
 import os
 import pandas as pd
@@ -11,7 +11,6 @@ from flask_session import Session
 
 # --- Importar tus módulos ---
 from modules.loader import cargar_datos
-# ¡Importa la nueva versión de filters!
 from modules.filters import aplicar_filtros_dinamicos
 from modules.translator import get_text, LANGUAGES
 from modules.json_manager import cargar_json, guardar_json 
@@ -371,11 +370,22 @@ def update_cell():
 @app.route('/api/undo_change', methods=['POST'])
 def undo_change():
     """
+    (Documentación de Google: Inicio de la función)
+    Propósito:
     Deshace la última acción (update, add, o delete) de 'history'
     y la revierte en 'df_staging'.
     
-    ¡NUEVO! (v7.6) Devuelve el 'affected_row_id' para que
-    el frontend pueda hacer scroll a la fila modificada.
+    Versión 7.7:
+    - 'undo update': (Sin cambios) revierte el valor de la celda.
+    - 'undo add': (Sin cambios) elimina la fila añadida.
+    - 'undo delete': (¡MODIFICADO!) Re-inserta la fila eliminada
+      en su 'original_index' (posición original en la lista),
+      en lugar de añadirla al final.
+    
+    Devuelve:
+    - JSON con el estado, KPIs, y el 'affected_row_id' para
+      que el frontend pueda hacer scroll a la fila modificada.
+    (Documentación de Google: Fin de la función)
     """
     try:
         # --- (Inicio de la función sin cambios) ---
@@ -393,10 +403,7 @@ def undo_change():
         datos_staging_lista = _get_df_from_session('df_staging')
         # --- (Fin de la parte sin cambios) ---
         
-        # --- ¡INICIO DEL CAMBIO (v7.6)! ---
-        # 1. Declara una variable para guardar el ID afectado.
         affected_row_id = None
-        # --- FIN DEL CAMBIO ---
         
         if action_type == 'update':
             # --- (Lógica de 'update' sin cambios) ---
@@ -413,30 +420,41 @@ def undo_change():
             if not fila_revertida:
                 raise Exception(f"Error de consistencia: no se encontró la fila {row_id_to_revert} para deshacer update.")
             
-            # --- ¡INICIO DEL CAMBIO (v7.6)! ---
-            # 2. Guarda el ID de la fila que acabamos de revertir.
             affected_row_id = row_id_to_revert
-            # --- FIN DEL CAMBIO ---
 
         elif action_type == 'add':
             # --- (Lógica de 'add' sin cambios) ---
             row_id_to_remove = last_action.get('row_id')
             datos_staging_lista = [fila for fila in datos_staging_lista if str(fila.get('_row_id')) != str(row_id_to_remove)]
             
-            # (No asignamos affected_row_id aquí porque la fila se elimina,
-            # no podemos hacer scroll a ella).
-            
         elif action_type == 'delete':
-            # --- (Lógica de 'delete' sin cambios) ---
+            # --- ¡INICIO DE LA CORRECCIÓN (v7.7)! ---
+            # (Documentación de Google: Lógica de 'undo delete')
+            
+            # 1. (Sin cambios) Obtiene la fila que guardamos.
             row_to_restore = last_action.get('deleted_row')
+            # 2. (NUEVO v7.7) Obtiene el índice original que guardamos.
+            original_index = last_action.get('original_index')
+            
+            # 3. (Sin cambios) Validación.
             if not row_to_restore:
                 raise Exception("Error de consistencia: no se encontró 'deleted_row' para deshacer delete.")
-            datos_staging_lista.append(row_to_restore)
 
-            # --- ¡INICIO DEL CAMBIO (v7.6)! ---
-            # 3. Obtiene el ID de la fila que acabamos de restaurar.
+            # 4. (¡MODIFICADO! v7.7)
+            #    Comprueba si tenemos un índice válido.
+            if original_index is not None and original_index >= 0:
+                # Si tenemos el índice (ej. 19), re-inserta la fila
+                # en esa posición exacta.
+                datos_staging_lista.insert(original_index, row_to_restore)
+            else:
+                # Si no (por ej. una acción de borrado antigua
+                # antes de v7.7), usa el método antiguo (append).
+                datos_staging_lista.append(row_to_restore)
+            # (Documentación de Google: Fin de la lógica 'undo delete')
+
+            # 5. (Sin cambios) Obtiene el ID de la fila restaurada.
             affected_row_id = row_to_restore.get('_row_id')
-            # --- FIN DEL CAMBIO ---
+            # --- FIN DE LA CORRECCIÓN (v7.7) ---
             
         else:
             raise Exception(f"Tipo de acción desconocida en el historial: {action_type}")
@@ -449,8 +467,7 @@ def undo_change():
         resumen_kpis = _calculate_kpis(df_staging_revertido)
         # --- (Fin de la parte sin cambios) ---
         
-        # --- ¡INICIO DEL CAMBIO (v7.6)! ---
-        # 4. Devuelve el JSON, añadiendo la nueva clave 'affected_row_id'.
+        # --- (Devolución del JSON sin cambios) ---
         return jsonify({
             "status": "success",
             "message": f"Acción '{action_type}' deshecha.",
@@ -459,7 +476,6 @@ def undo_change():
             "resumen": resumen_kpis,
             "affected_row_id": affected_row_id # ¡Devuelve el ID!
         })
-        # --- FIN DEL CAMBIO ---
 
     except Exception as e:
         print(f"Error en /api/undo_change: {e}") 
@@ -558,14 +574,24 @@ def add_row():
         print(f"Error en /api/add_row: {e}") 
         return jsonify({"error": str(e)}), 500
 
-# --- (API /api/delete_row sin cambios) ---
+# --- ¡API /api/delete_row MODIFICADA! ---
 @app.route('/api/delete_row', methods=['POST'])
 def delete_row():
     """
-    Elimina una fila de 'df_staging' (basado en _row_id) y
-    guarda la fila eliminada en 'history' para poder deshacer.
+    (Documentación de Google: Inicio de la función)
+    Propósito:
+    Elimina una fila de 'df_staging' (basado en _row_id).
+    
+    Versión 7.7:
+    - (¡MODIFICADO!) Ahora usa 'enumerate' para encontrar el
+      índice (la posición) de la fila en la lista.
+    - (¡MODIFICADO!) Guarda tanto la 'deleted_row' (la fila)
+      como el 'original_index' (la posición) en el historial
+      para poder deshacer la acción correctamente.
+    (Documentación de Google: Fin de la función)
     """
     try:
+        # 1. (Sin cambios) Obtener datos de la petición.
         data = request.json
         file_id = data.get('file_id')
         row_id_to_delete = data.get('row_id')
@@ -574,32 +600,54 @@ def delete_row():
         if row_id_to_delete is None:
             return jsonify({"error": "Falta row_id"}), 400
             
+        # 2. (Sin cambios) Obtener datos de la sesión.
         datos_staging_lista = _get_df_from_session('df_staging')
         history_stack = session.get('history', [])
         
+        # --- ¡INICIO DE LA CORRECCIÓN (v7.7)! ---
+        # (Documentación de Google: Lógica de 'delete_row')
+        
         fila_eliminada = None
         nuevos_datos_staging = []
+        # 3. (NUEVO v7.7) Variable para guardar el índice de la lista.
+        indice_eliminado = -1 
         
-        for fila in datos_staging_lista:
+        # 4. (¡MODIFICADO! v7.7) Itera usando 'enumerate'
+        #    para obtener tanto el índice (i) como la fila (fila).
+        for i, fila in enumerate(datos_staging_lista):
+            # Compara el _row_id (ej. 19)
             if str(fila.get('_row_id')) == str(row_id_to_delete):
+                # Si coincide, guarda la fila completa.
                 fila_eliminada = fila
+                # (NUEVO v7.7) Y guarda el índice de la lista (ej. 19).
+                indice_eliminado = i 
             else:
+                # Si no coincide, la añade a la nueva lista.
                 nuevos_datos_staging.append(fila)
+        # (Documentación de Google: Fin de la lógica 'delete_row')
+        # --- FIN DE LA CORRECCIÓN (v7.7) ---
                 
+        # 5. (Sin cambios) Validación.
         if not fila_eliminada:
             return jsonify({"error": f"No se encontró la fila con _row_id {row_id_to_delete}"}), 404
             
+        # 6. (¡MODIFICADO! v7.7)
+        #    Crea el objeto de historial guardando AMBAS cosas.
         change_obj = {
             'action': 'delete',
-            'deleted_row': fila_eliminada 
+            'deleted_row': fila_eliminada,  # La fila completa
+            'original_index': indice_eliminado # El índice donde estaba
         }
+        # 7. (Sin cambios) Añade al historial y maneja el límite.
         history_stack.append(change_obj)
         if len(history_stack) > UNDO_STACK_LIMIT:
             history_stack.pop(0)
             
+        # 8. (Sin cambios) Guarda la *nueva* lista (sin la fila) en la sesión.
         session['df_staging'] = nuevos_datos_staging
         session['history'] = history_stack
         
+        # 9. (Sin cambios) Recalcula KPIs y responde.
         df_staging_modificado = pd.DataFrame.from_records(nuevos_datos_staging)
         resumen_kpis = _calculate_kpis(df_staging_modificado)
         

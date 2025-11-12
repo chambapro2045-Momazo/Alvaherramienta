@@ -1,16 +1,13 @@
-// script.js (Versión 7.31 - Corrección de Altura en Pantalla Completa)
+// script.js (Versión 12.0 - Ordenamiento Multi-Nivel)
 // NOTA:
-// 1. Se corrige el bug de 'image_e9b89b.png' donde la tabla
-//    no se expandía a pantalla completa.
-// 2. El problema era que 'new Tabulator' tenía 'height: "65vh"'.
-//    Esto creaba un INLINE STYLE que "le ganaba" al CSS
-//    de la pantalla completa.
-// 3. CORRECCIÓN: Se ELIMINA 'height: "65vh"' de
-//    'renderTable' y 'renderGroupedTable'.
-// 4. La altura ahora será 100% controlada por 'static/style.css',
-//    lo cual es la solución correcta.
-// 5. La función 'handleFullscreen' (de v7.30) que usa 'redraw()'
-//    sigue siendo correcta y necesaria.
+// 1. (¡NUEVO v12.0!) Se actualiza el 'sorter' de la columna
+//    '_priority' en 'renderTable'.
+// 2. (¡NUEVO v12.0!) El 'sorter' ahora ordena primero por
+//    Prioridad (DESC) y, si son iguales, por
+//    'Invoice Date Age' (DESC).
+// 3. (v11.0) Implementación de Guardar/Cargar Vistas JSON.
+// 4. (v10.1) Columna '_row_status' ahora es móvil.
+// 5. (v9.0) Implementación de Hotkeys.
 
 // --- Variable global para traducciones ---
 let i18n = {}; 
@@ -32,15 +29,16 @@ let autocompleteOptions = {};
 let tabulatorInstance = null;
 let groupedTabulatorInstance = null; 
 
-// (Columnas agrupables sin cambios)
+// (Columnas agrupables ¡MODIFICADO v8.0!)
 const COLUMNAS_AGRUPABLES = [
     "Vendor Name", "Status", "Assignee", 
-    "Operating Unit Name", "Pay Status", "Document Type", "_row_status",
+    "Operating Unit Name", "Pay Status", "Document Type", 
+    "_row_status", "_priority", // <-- ¡NUEVO v8.0!
     "Pay group", "WEC Email Inbox", "Sender Email", "Currency Code", "payment method"
 ];
 
 // ---
-// SECCIÓN 1: MANEJO DE COLUMNAS (Sin cambios)
+// SECCIÓN 1: MANEJO DE COLUMNAS (¡MODIFICADO v8.1!)
 // ---
 function renderColumnSelector() {
     // ... (Sin cambios desde v7.30) ...
@@ -51,13 +49,28 @@ function renderColumnSelector() {
         wrapper.innerHTML = `<p>${i18n['info_upload'] || 'Upload file'}</p>`; 
         return; 
     }
-    todasLasColumnas.filter(col => col !== '_row_id').forEach(columnName => {
+    
+    // (Documentación de Google: Inicio de la Solución 3 - Ocultar Columna)
+    // (¡MODIFICADO v8.1!) Filtra las columnas internas que el
+    // usuario no debe tocar Y la columna "Priority" original.
+    todasLasColumnas.filter(col => 
+        col !== '_row_id' && 
+        col !== '_priority' && 
+        col !== 'Priority' // <-- SOLUCIÓN: Oculta "Priority" original
+    ).forEach(columnName => {
+    // (Documentación de Google: Fin de la Solución 3)
+        
         const isChecked = columnasVisibles.includes(columnName);
+        
+        // (¡MODIFICADO v8.0!) Formatea el nombre de _row_status
+        let colText = columnName;
+        if (columnName === '_row_status') { colText = "Row Status"; }
+
         const itemHTML = `
             <div class="column-selector-item">
                 <label>
                     <input type="checkbox" value="${columnName}" ${isChecked ? 'checked' : ''}>
-                    ${(columnName === '_row_status') ? "Row Status" : columnName}
+                    ${colText}
                 </label>
             </div>`;
         wrapper.innerHTML += itemHTML;
@@ -72,9 +85,23 @@ function updateVisibleColumnsFromCheckboxes() {
             columnasVisibles.push(cb.value);
         }
     });
+    // (¡MODIFICADO v8.0!) Asegura que las columnas internas siempre estén
     if (todasLasColumnas.includes('_row_id')) {
         columnasVisibles.push('_row_id');
     }
+    if (todasLasColumnas.includes('_priority')) {
+        columnasVisibles.push('_priority');
+    }
+    
+    // (Documentación de Google: Solución 3 - Ocultar Columna)
+    // Nos aseguramos de que "Priority" (la original) NUNCA
+    // esté en la lista de visibles, pero SÍ esté en
+    // 'todasLasColumnas' (para filtrarla en el render).
+    if (columnasVisibles.includes('Priority')) {
+        columnasVisibles = columnasVisibles.filter(col => col !== 'Priority');
+    }
+    // (Documentación de Google: Fin de la Solución 3)
+    
     renderTable();
 }
 function handleColumnVisibilityChange(event) {
@@ -94,7 +121,7 @@ function handleUncheckAllColumns() {
     updateVisibleColumnsFromCheckboxes();
 }
 // ---
-// SECCIÓN 2: CONFIGURACIÓN INICIAL Y LISTENERS (Sin cambios)
+// SECCIÓN 2: CONFIGURACIÓN INICIAL Y LISTENERS (¡MODIFICADO v11.0!)
 // ---
 async function loadTranslations() {
     // ... (Sin cambios desde v7.30) ...
@@ -125,6 +152,11 @@ function setupEventListeners() {
             element.addEventListener(event, handler);
         }
     };
+
+    // (Documentación de Google: Inicio de la Solución v9.0 - Hotkeys)
+    // Añade el listener de teclado global a todo el documento
+    addSafeListener(document, 'keydown', handleGlobalKeydown);
+    // (Documentación de Google: Fin de la Solución v9.0)
 
     // Listeners Generales
     addSafeListener(fileUploader, 'change', handleFileUpload);
@@ -161,6 +193,11 @@ function setupEventListeners() {
     // Listener de Gestión de Listas
     addSafeListener(document.getElementById('btn-manage-lists'), 'click', handleManageLists);
 
+    // (Documentación de Google: INICIO DE NUEVOS LISTENERS v11.0)
+    addSafeListener(document.getElementById('btn-save-view'), 'click', handleSaveView);
+    addSafeListener(document.getElementById('input-load-view'), 'change', handleLoadView);
+    // (Documentación de Google: FIN DE NUEVOS LISTENERS v11.0)
+
     // Listeners Drag and Drop
     if (dragDropArea) {
         // ... (código de drag/drop sin cambios) ...
@@ -194,7 +231,7 @@ function updateDynamicText() {
     const resultsTableGrouped = document.getElementById('results-table-grouped');
 
     if (valInput) valInput.placeholder = i18n['search_text'] || "Texto a buscar...";
-    if (searchTableInput) searchTableInput.placeholder = (i18n['search_text'] || "Buscar...") + "...";
+    if (searchTableInput) searchTableInput.placeholder = (i18n['search_text'] || "Buscar...") + "... (Hotkey: F)";
     
     if (resultsTableDiv && !tabulatorInstance && !currentFileId) {
         resultsTableDiv.innerHTML = `<p>${i18n['info_upload'] || 'Upload file'}</p>`;
@@ -246,6 +283,8 @@ async function handleFileUpload(event) {
 
         currentFileId = result.file_id;
         todasLasColumnas = result.columnas; 
+        
+        // (¡MODIFICADO v8.0!) Setea todas las columnas como base
         columnasVisibles = [...todasLasColumnas];
         
         autocompleteOptions = result.autocomplete_options || {};
@@ -253,6 +292,11 @@ async function handleFileUpload(event) {
 
         populateColumnDropdowns(); 
         renderColumnSelector(); 
+        
+        // (¡NUEVO v8.1!) Llama a update para asegurar que las
+        // columnas internas se añadan Y la "Priority" original se quite
+        updateVisibleColumnsFromCheckboxes();
+        
         resetResumenCard(); 
         
         activeFilters = []; 
@@ -316,16 +360,7 @@ async function handleRemoveFilter(event) {
  * (v7.30 - Sin 'setHeight', solo 'redraw')
  */
 function handleFullscreen(event) {
-    // (Documentación de Google: Inicio de la función)
-    // Propósito: Alterna el modo de pantalla completa para la vista activa.
-    // v7.30: Se eliminan las llamadas a 'setHeight()' que causaban
-    // un bucle de renderizado y "freeze" al pelear con el CSS.
-    // Se reemplazan por una única llamada a 'redraw(true)'
-    // después de un 'setTimeout' para permitir que el CSS
-    // termine su transición antes de que Tabulator se re-dibuje.
-    // (Documentación de Google: Fin de la función)
-
-    // 1. (Sin cambios) Identifica qué contenedor y tabla están activos.
+    // ... (Sin cambios desde v7.31) ...
     const viewContainerId = (currentView === 'detailed') 
         ? 'view-container-detailed' 
         : 'view-container-grouped';
@@ -336,61 +371,34 @@ function handleFullscreen(event) {
         ? tabulatorInstance 
         : groupedTabulatorInstance;
 
-    // 2. (Sin cambios) Define los SVGs de los iconos.
     const iconExpand = `<path stroke-linecap="round" stroke-linejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" />`;
     const iconCollapse = `<path stroke-linecap="round" stroke-linejoin="round" d="M9 9V4.5M9 9H4.5M9 9L3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9V4.5M15 9h4.5M15 9l5.25-5.25M15 15v4.5M15 15h4.5M15 15l5.25 5.25" />`;
 
-    // 3. (Sin cambios) Revisa el estado actual.
     if (document.body.classList.contains('fullscreen-mode')) {
-        
-        // --- LÓGICA DE SALIR DE PANTALLA COMPLETA ---
-        
-        // 4. (Sin cambios) Quita las clases de CSS.
         document.body.classList.remove('fullscreen-mode');
         if (viewContainer) viewContainer.classList.remove('in-fullscreen');
         
-        // 5. (Sin cambios v7.29) Actualiza AMBOS botones.
-        document.querySelectorAll('.icon-button[title="Pantalla Completa"]').forEach(btn => {
+        document.querySelectorAll('.icon-button[title="Pantalla Completa (Hotkey: G)"]').forEach(btn => {
             const svg = btn.querySelector('svg');
-            if (svg) svg.innerHTML = iconExpand; // Pone el icono de "expandir"
+            if (svg) svg.innerHTML = iconExpand; 
         });
 
-        // 6. (!!! ELIMINADO v7.30 !!!)
-        // Se elimina el setTimeout(setHeight("65vh")).
-        // Era la causa del "freeze".
-
     } else {
-        
-        // --- LÓGICA DE ENTRAR A PANTALLA COMPLETA ---
-        
-        // 4. (Sin cambios) Añade las clases de CSS.
         document.body.classList.add('fullscreen-mode');
         if (viewContainer) viewContainer.classList.add('in-fullscreen');
 
-        // 5. (Sin cambios v7.29) Actualiza AMBOS botones.
-        document.querySelectorAll('.icon-button[title="Pantalla Completa"]').forEach(btn => { 
+        document.querySelectorAll('.icon-button[title="Pantalla Completa (Hotkey: G)"]').forEach(btn => { 
             const svg = btn.querySelector('svg');
-            if (svg) svg.innerHTML = iconCollapse; // Pone el icono de "colapsar"
+            if (svg) svg.innerHTML = iconCollapse; 
         });
-        
-        // 6. (!!! ELIMINADO v7.30 !!!)
-        // Se elimina el setTimeout(setHeight("100%")).
-        // Era la causa de los 4 renders.
     }
 
-    // --- (Lógica v7.30) ---
-    // 7. (NUEVO) Añade UN SOLO setTimeout
-    //    que se ejecuta DESPUÉS del cambio de clases.
     setTimeout(() => {
-        // Comprueba si la tabla activa (detallada o agrupada) existe.
         if (activeTableInstance) {
-            // Llama a redraw(true) para forzar a Tabulator
-            // a recalcular su tamaño basándose en el CSS.
-            // Esto es mucho más seguro que 'setHeight'.
             console.log("Refrescando el tamaño de Tabulator después de la transición CSS.");
             activeTableInstance.redraw(true);
         }
-    }, 200); // 200ms da tiempo a que la animación CSS termine.
+    }, 200); 
 }
 
 
@@ -427,13 +435,17 @@ function handleSearchTable() {
 
 
 async function handleDownloadExcel() {
-    // ... (Sin cambios desde v7.30) ...
+    // ... (¡MODIFICADO v8.1!) ...
     if (!currentFileId) { 
         alert(i18n['no_data_to_download'] || "No hay datos para descargar."); 
         return; 
     }
     
-    const colsToDownload = [...columnasVisibles];
+    // (Documentación de Google: Inicio de la Solución 3 - Ocultar Columna)
+    // (¡MODIFICADO!) Filtra la columna "Priority" original (del Excel)
+    // pero MANTIENE nuestra columna "_priority" (la generada).
+    const colsToDownload = columnasVisibles.filter(col => col !== 'Priority');
+    // (Documentación de Google: Fin de la Solución 3)
     
     try {
         const response = await fetch('/api/download_excel', {
@@ -441,7 +453,7 @@ async function handleDownloadExcel() {
             body: JSON.stringify({ 
                 file_id: currentFileId, 
                 filtros_activos: activeFilters, 
-                columnas_visibles: colsToDownload 
+                columnas_visibles: colsToDownload // <-- Usa la lista filtrada
             })
         });
         if (!response.ok) throw new Error('Error del servidor al generar Excel.');
@@ -577,13 +589,107 @@ async function handleManageLists() {
     }
 }
 
+
+// (Documentación de Google: Inicio de la Solución v9.0 - Hotkeys)
+/**
+ * @description Gestiona los atajos de teclado globales.
+ * (¡NUEVO v9.0!)
+ */
+function handleGlobalKeydown(event) {
+    // (Documentación de Google: 1. El "Guardia")
+    // Si el usuario está escribiendo en un input, select, o
+    // un editor de celda de Tabulator, NO activamos los hotkeys.
+    const target = event.target;
+    const isTyping = target.tagName === 'INPUT' || 
+                     target.tagName === 'SELECT' || 
+                     target.tagName === 'TEXTAREA' ||
+                     target.isContentEditable ||
+                     (target.classList && target.classList.contains('tabulator-editing'));
+
+    // Si el usuario está escribiendo, ignoramos todos los atajos
+    if (isTyping) {
+        return; 
+    }
+
+    // (Documentación de Google: 2. El "Mapeo" según lo acordado)
+    let handled = true; // Para prevenir la acción por defecto
+
+    switch (event.key) {
+        case 'a': // minúscula
+        case 'A': // mayúscula
+            console.log("Hotkey: 'A' - Añadir Fila");
+            // Solo añade fila si hay un archivo cargado
+            if (currentFileId && currentView === 'detailed') {
+                handleAddRow();
+            }
+            break;
+        
+        case 'z':
+        case 'Z':
+            console.log("Hotkey: 'Z' - Deshacer");
+            // Solo deshace si hay historial
+            if (undoHistoryCount > 0 && currentView === 'detailed') {
+                handleUndoChange();
+            }
+            break;
+
+        case 's':
+        case 'S':
+            console.log("Hotkey: 'S' - Consolidar");
+            // Solo consolida si hay historial
+            if (undoHistoryCount > 0 && currentView === 'detailed') {
+                handleCommitChanges();
+            }
+            break;
+
+        case 'Delete': // Tecla "Suprimir"
+            console.log("Hotkey: 'Delete' - Limpiar Filtros");
+            // Solo limpia si hay filtros activos
+            if (activeFilters.length > 0) {
+                handleClearFilters();
+            }
+            break;
+        
+        case 'f':
+        case 'F':
+            console.log("Hotkey: 'F' - Foco en Búsqueda");
+            // Solo funciona en la vista detallada
+            if (currentView === 'detailed') {
+                const searchInput = document.getElementById('input-search-table');
+                if (searchInput) {
+                    searchInput.focus();
+                }
+            }
+            break;
+
+        case 'g': // Usando G para Fullscreen
+        case 'G':
+            console.log("Hotkey: 'G' - Pantalla Completa");
+            // Funciona en ambas vistas
+            handleFullscreen();
+            break;
+
+        default:
+            handled = false; // No era un hotkey, no hacemos nada
+            break;
+    }
+
+    if (handled) {
+        // Si fue un hotkey que manejamos, prevenimos la acción por defecto
+        // (ej. que la 'f' se escriba en la barra de búsqueda del navegador)
+        event.preventDefault();
+    }
+}
+// (Documentación de Google: Fin de la Solución v9.0)
+
+
 // ---
 // --- FUNCIONES DE EDICIÓN ---
 // ---
 
 /**
  * @description Llama a la API para AÑADIR una nueva fila en blanco.
- * (Sin cambios desde v7.30)
+ * (¡MODIFICADO v8.4!)
  */
 async function handleAddRow() {
     if (!currentFileId) {
@@ -619,10 +725,28 @@ async function handleAddRow() {
                 tabulatorInstance.scrollToRow(result.new_row_id, "bottom", false);
                 const row = tabulatorInstance.getRow(result.new_row_id);
                 if (row) {
-                    row.getElement().style.backgroundColor = "#FFF9E5"; 
-                    setTimeout(() => {
-                        row.getElement().style.backgroundColor = ""; 
-                    }, 2000);
+                    // (Documentación de Google: Solución v8.4)
+                    // Añade una comprobación 'if (rowElement)'
+                    const rowElement = row.getElement();
+                    if (rowElement) {
+                        // (v8.0) La fila nueva tendrá 'priority-media' por defecto
+                        // por el rowFormatter, pero la resaltamos temporalmente.
+                        // (v8.5) El resaltado debe ser sobre el 'rowElement'
+                        rowElement.style.backgroundColor = "#FFF9E5"; 
+                        setTimeout(() => {
+                            // (v8.0) Quita el resaltado.
+                            if (rowElement) {
+                                // (v8.5) El CSS de prioridad lo gestiona el
+                                // rowFormatter, solo quitamos el resaltado.
+                                rowElement.style.backgroundColor = ""; 
+                            }
+                            // (v8.0) Fuerza un redibujado de la fila para que
+                            // el rowFormatter aplique el color de prioridad
+                            if(row) {
+                                row.reformat();
+                            }
+                        }, 2000);
+                    }
                 }
             }, 100);
         }
@@ -675,22 +799,17 @@ async function handleDeleteRow(row_id) {
 
 /**
  * @description Llama a la API para DESHACER el último cambio.
- * (Lógica v7.27/v7.28 sin cambios)
+ * (¡MODIFICADO v8.4! - Corrección de Race Condition)
  */
 async function handleUndoChange() {
     // (Documentación de Google: Inicio de la función)
     // Propósito: Deshace la última acción del usuario (update, add, delete).
-    // Esta versión (v7.27) soluciona una "condición de carrera" (race condition)
-    // donde el scroll fallaba porque el listener de 'renderComplete' se
-    // adjuntaba *después* de que el renderizado ya había sucedido.
-    // También maneja el renderizado múltiple (setColumns, setData)
-    // y el caso de filas filtradas.
     // (Fin de la documentación de Google)
 
     // 1. (Sin cambios) Verificaciones iniciales.
     if (undoHistoryCount === 0 || !currentFileId) {
-        // Si no hay historial o no hay archivo, no hace nada.
-        alert("No hay nada que deshacer.");
+        // (v9.0) Alerta silenciosa para hotkeys
+        console.warn("No hay nada que deshacer.");
         return;
     }
     console.log("Deshaciendo último cambio...");
@@ -698,48 +817,42 @@ async function handleUndoChange() {
     try {
         // 2. (Sin cambios) Llama a la API de deshacer del backend.
         const response = await fetch('/api/undo_change', {
-            method: 'POST', // Método HTTP
-            headers: { 'Content-Type': 'application/json' }, // Tipo de contenido
-            body: JSON.stringify({ file_id: currentFileId }) // Envía el file_id
+            method: 'POST', 
+            headers: { 'Content-Type': 'application/json' }, 
+            body: JSON.stringify({ file_id: currentFileId }) 
         });
 
         // 3. (Sin cambios) Obtiene el resultado (que incluye 'affected_row_id').
         const result = await response.json();
-        // Si la respuesta no fue exitosa (ej. 404, 500), lanza un error.
         if (!response.ok) throw new Error(result.error);
         
-        console.log(result.message); // Muestra ej. "Acción 'update' deshecha."
+        console.log(result.message); 
         
         // 4. (Sin cambios) Actualiza el contador de deshacer en la UI.
         undoHistoryCount = result.history_count;
-        updateActionButtonsVisibility(); // Actualiza los botones (ej. "Deshacer (2)")
+        updateActionButtonsVisibility(); 
 
         // --- ¡INICIO DE LA LÓGICA DE SCROLL (v7.27/v7.28)! ---
-        // Se adjunta el listener ANTES de llamar a getFilteredData.
         
         // 5. (Modificado) Comprueba SI NECESITAMOS hacer scroll.
         if (result.affected_row_id && tabulatorInstance) {
             
             // 6. (Nuevo) Guarda el ID de la fila y define los contadores.
             const rowId = result.affected_row_id;
-            let renderAttempts = 0;      // Contador de intentos.
-            const maxAttempts = 3;       // Límite (setColumns, setData, y uno de repuesto).
+            let renderAttempts = 0;      
+            const maxAttempts = 3;       
             
             console.log("Deshacer completado, programando scroll a la fila:", rowId);
 
             // 7. (Nuevo) Define el listener "inteligente" de un solo uso.
             const scrollOnce = () => {
-                // Incrementa el contador de intentos.
                 renderAttempts++;
                 console.log(`Intento de render [${renderAttempts}/${maxAttempts}], intentando scroll a:`, rowId);
                 
-                // Intenta OBTENER la fila de Tabulator
-                // (Gracias a `index: "_row_id"`, esto buscará por ID)
                 const row = tabulatorInstance.getRow(rowId);
                 
                 if (row) {
                     // --- ÉXITO ---
-                    // La fila existe (probablemente del render de 'setData').
                     console.log("Fila encontrada, haciendo scroll y resaltando.");
                     
                     // 1. Desconecta el listener.
@@ -748,46 +861,62 @@ async function handleUndoChange() {
                     // 2. Ejecuta el scroll y el resaltado.
                     tabulatorInstance.scrollToRow(row, "center", false)
                     .then(() => {
-                        // Resalta en amarillo.
-                        row.getElement().style.backgroundColor = "#FFF9E5"; 
-                        // Quita el resaltado después de 2 segundos.
-                        setTimeout(() => {
-                            row.getElement().style.backgroundColor = ""; 
-                        }, 2000);
+                        
+                        // (Documentación de Google: Inicio de la Solución v8.4)
+                        // Añade una comprobación de seguridad antes de
+                        // intentar acceder a .style.backgroundColor
+                        const rowElement = row.getElement();
+                        if (rowElement) {
+                            // (v8.5) El resaltado debe ser sobre el 'rowElement'
+                            rowElement.style.backgroundColor = "#FFF9E5"; 
+                            
+                            setTimeout(() => {
+                                // Comprueba de nuevo dentro del timeout
+                                if (rowElement) {
+                                    // (v8.5) El CSS de prioridad lo gestiona el
+                                    // rowFormatter, solo quitamos el resaltado.
+                                    rowElement.style.backgroundColor = ""; 
+                                }
+                                // Fuerza un redibujado de la fila para que
+                                // el rowFormatter aplique el color de prioridad
+                                if(row) {
+                                    row.reformat();
+                                }
+                            }, 2000);
+                        } else {
+                            console.warn(`scrollOnce.then: Fila ${rowId} encontrada, pero su elemento DOM no está renderizado para el resaltado.`);
+                        }
+                        // (Documentación de Google: Fin de la Solución v8.4)
+                        
+                    })
+                    .catch(err => {
+                        // (SOLUCIÓN v8.4) Maneja el error si scrollToRow falla
+                        console.warn(`scrollToRow falló para la fila ${rowId} (probablemente está filtrada).`, err);
                     });
                     
                 } else if (renderAttempts >= maxAttempts) {
                     // --- FALLO FINAL ---
-                    // Se superó el límite de intentos.
-                    // Esto pasa si la fila está FILTRADA.
                     console.warn(`Falló el scroll a la fila ${rowId} (probablemente está filtrada). Abandonando.`);
-                    // 1. Desconecta el listener para evitar bucles.
                     tabulatorInstance.off("renderComplete", scrollOnce); 
                     
                 } else {
                     // --- FALLO TEMPORAL ---
-                    // La fila no se encontró (probablemente era el render de
-                    // 'setColumns'). No desconecta el listener.
                     console.warn(`Intento de scroll falló, la fila ${rowId} aún no está (esperando próximo render)...`);
                 }
             };
             
-            // 8. (Nuevo) ¡CRÍTICO! Adjunta el listener AHORA,
-            //    ANTES de que 'getFilteredData' cause el renderizado.
+            // 8. (Nuevo) ¡CRÍTICO! Adjunta el listener AHORA
             tabulatorInstance.on("renderComplete", scrollOnce);
 
         } // Fin de if(necesitamos-scroll)
 
         // 9. (Modificado) AHORA llama a getFilteredData().
-        //    Esto causará que setColumns() y setData() se ejecuten,
-        //    disparando 'renderComplete', que será capturado
-        //    por nuestro listener 'scrollOnce'.
         await getFilteredData();
         
         // --- FIN DE LA LÓGICA DE SCROLL ---
 
     } catch (error) {
-        // (Sin cambios) Captura de errores (ej. si la API falla).
+        // (Sin cambios) Captura de errores
         console.error("Error al deshacer el cambio:", error);
         alert("Error al deshacer: " + error.message);
     }
@@ -799,6 +928,12 @@ async function handleUndoChange() {
  * (Sin cambios desde v7.30)
  */
 async function handleCommitChanges() {
+    // (v9.0) Comprobación de hotkey
+    if (undoHistoryCount === 0 || !currentFileId) {
+        console.warn("No hay cambios que consolidar.");
+        return;
+    }
+    
     if (!confirm("¿Estás seguro de que quieres consolidar todos los cambios?\n\nEsta acción guardará el estado actual y limpiará el historial de deshacer.")) {
         return;
     }
@@ -829,6 +964,142 @@ async function handleCommitChanges() {
     }
 }
 // --- FIN DE FUNCIONES DE EDICIÓN ---
+
+
+// (Documentación de Google: INICIO DE NUEVAS FUNCIONES v11.0)
+/**
+ * @description Guarda la configuración de la vista actual en un
+ * archivo JSON.
+ * (¡NUEVO v11.0!)
+ */
+function handleSaveView() {
+    // (Documentación de Google: 1. Comprueba si hay un archivo
+    //  cargado, sino no hay nada que guardar)
+    if (!currentFileId) {
+        alert(i18n['no_data_to_save_view'] || "Cargue un archivo primero para guardar una vista.");
+        return;
+    }
+
+    console.log("Guardando la configuración de la vista...");
+
+    // (Documentación de Google: 2. Recopila el estado actual
+    //  de las variables globales)
+    const groupByColElement = document.getElementById('select-columna-agrupar');
+    const viewConfig = {
+        viewType: currentView,
+        activeFilters: activeFilters,
+        visibleColumns: columnasVisibles,
+        groupByColumn: groupByColElement ? groupByColElement.value : ""
+    };
+
+    // (Documentación de Google: 3. Crea el archivo JSON en memoria)
+    const jsonString = JSON.stringify(viewConfig, null, 2);
+    const blob = new Blob([jsonString], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+
+    // (Documentación de Google: 4. Crea un enlace temporal
+    //  para activar la descarga)
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'mi_vista_config.json';
+    document.body.appendChild(a);
+    a.click();
+    
+    // (Documentación de Google: 5. Limpia el enlace temporal)
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+/**
+ * @description Carga la configuración de la vista desde un
+ * archivo JSON.
+ * (¡NUEVO v11.0!)
+ */
+function handleLoadView(event) {
+    const file = event.target.files[0];
+    
+    // (Documentación de Google: 1. Valida que sea un
+    //  archivo JSON y que haya un archivo de Excel
+    //  cargado en la sesión)
+    if (!file || file.type !== 'application/json') {
+        alert(i18n['invalid_json_file'] || "Por favor, seleccione un archivo .json válido.");
+        event.target.value = null; // Resetea el input
+        return;
+    }
+    
+    if (!currentFileId) {
+        alert(i18n['load_excel_first'] || "Por favor, cargue primero un archivo Excel antes de cargar una vista.");
+        event.target.value = null; // Resetea el input
+        return;
+    }
+
+    console.log("Cargando configuración de vista desde JSON...");
+
+    // (Documentación de Google: 2. Usa FileReader para leer
+    //  el contenido del JSON)
+    const reader = new FileReader();
+    
+    reader.onload = async (e) => {
+        try {
+            // (Documentación de Google: 3. Parsea el JSON)
+            const config = JSON.parse(e.target.result);
+
+            // (Documentación de Google: 4. Aplica la configuración
+            //  a las variables globales)
+            activeFilters = config.activeFilters || [];
+            
+            // (Documentación de Google: 4.1. Valida que las columnas
+            //  del JSON existan en el archivo actual)
+            const loadedVisibleCols = config.visibleColumns || todasLasColumnas;
+            columnasVisibles = loadedVisibleCols.filter(col => todasLasColumnas.includes(col));
+
+            const viewType = config.viewType || 'detailed';
+            const groupByCol = config.groupByColumn || '';
+
+            // (Documentación de Google: 5. Actualiza la UI
+            //  con la nueva configuración)
+            
+            // Actualiza las checkboxes de columnas visibles
+            const checkboxes = document.querySelectorAll('#column-selector-wrapper input[type="checkbox"]');
+            checkboxes.forEach(cb => {
+                cb.checked = columnasVisibles.includes(cb.value);
+            });
+            
+            // Actualiza el dropdown de agrupar
+            const groupBySelect = document.getElementById('select-columna-agrupar');
+            if (groupBySelect) {
+                // Comprueba si la opción cargada es válida
+                if (groupBySelect.querySelector(`option[value="${groupByCol}"]`)) {
+                    groupBySelect.value = groupByCol;
+                } else {
+                    groupBySelect.value = ""; // Resetea si no es válida
+                }
+            }
+
+            // (Documentación de Google: 6. Refresca la vista.
+            //  Llama a toggleView con 'force=true' para forzar
+            //  un repintado completo (refreshActiveView))
+            toggleView(viewType, true); 
+
+            console.log("Configuración de vista cargada y aplicada.");
+
+        } catch (error) {
+            console.error("Error al parsear el archivo JSON:", error);
+            alert(i18n['json_parse_error'] || "Error al leer el archivo JSON. El formato podría ser inválido.");
+        }
+    };
+    
+    reader.onerror = () => {
+        console.error("Error al leer el archivo:", reader.error);
+        alert(i18n['file_read_error'] || "No se pudo leer el archivo.");
+    };
+
+    // (Documentación de Google: 7. Inicia la lectura y resetea
+    //  el input para poder cargar el mismo archivo dos veces)
+    reader.readAsText(file);
+    event.target.value = null;
+}
+// (Documentación de Google: FIN DE NUEVAS FUNCIONES v11.0)
 
 
 // ---
@@ -864,7 +1135,7 @@ function resetResumenCard() {
 
 
 function renderFilters() {
-    // ... (Sin cambios desde v7.30) ...
+    // ... (¡MODIFICADO v8.0!) ...
     const listId = (currentView === 'detailed') ? 'active-filters-list' : 'active-filters-list-grouped';
     const clearBtnId = (currentView === 'detailed') ? 'btn-clear-filters' : 'btn-clear-filters-grouped';
     
@@ -886,8 +1157,15 @@ function renderFilters() {
     btnClear.style.display = 'inline-block';
     
     activeFilters.forEach((filtro, index) => {
-        // (Tu Punto 3) Muestra "N° Fila" si el filtro es por '_row_id'
-        const colName = (filtro.columna === '_row_id') ? 'N° Fila' : filtro.columna;
+        // (¡MODIFICADO v8.0!) Muestra nombres amigables para columnas internas
+        let colName = filtro.columna;
+        if (filtro.columna === '_row_id') { colName = 'N° Fila'; }
+        if (filtro.columna === '_row_status') { colName = 'Row Status'; }
+        if (filtro.columna === '_priority') { colName = 'Prioridad'; }
+        
+        // (SOLUCIÓN v8.1) Oculta la columna "Priority" original si se filtra
+        if (filtro.columna === 'Priority') { return; }
+        
         const filterItemHTML = `
             <div class="filtro-chip">
                 <span>${colName}: <strong>${filtro.valor}</strong></span>
@@ -901,14 +1179,15 @@ function renderFilters() {
 
 /**
  * @description Renderiza la tabla DETALLADA.
- * ¡FUNCIÓN MODIFICADA! (v7.31)
+ * ¡FUNCIÓN MODIFICADA! (v12.0)
  */
 function renderTable(data = null, forceClear = false) {
     // (Documentación de Google: Inicio de la función)
     // Propósito: Renderiza la tabla principal de Tabulator.
-    // v7.31: Se elimina 'height: "65vh"' para permitir
-    // que el CSS controle la altura de la tabla,
-    // solucionando el bug de la pantalla completa.
+    // v12.0: 'sorter' de _priority ahora incluye 'Invoice Date Age'
+    //      como segundo nivel de ordenamiento.
+    // v10.1: '_row_status' es una columna móvil.
+    // v8.x: Sorter de prioridad, ocultar "Priority", etc.
     // (Fin de la documentación de Google)
     
     // 1. (Sin cambios) Obtiene el contenedor de la tabla.
@@ -950,7 +1229,9 @@ function renderTable(data = null, forceClear = false) {
         "Batch Matching Date"
     ]);
     
-    // 6. (Sin cambios) Definir las Columnas de la Tabla (Base).
+    // 6. (¡MODIFICADO v10.1!) Definir las Columnas de la Tabla (Base).
+    // (Documentación de Google: Se elimina el bloque
+    //  de '_row_status' de esta sección)
     const columnDefs = [
         // Columna de Eliminar
         {
@@ -983,18 +1264,78 @@ function renderTable(data = null, forceClear = false) {
             formatter: function(cell) {
                 return cell.getValue() + 1; // 0-indexed a 1-indexed
             }
+        },
+        // (¡NUEVO v8.0! ¡MODIFICADO v12.0!) Columna de Prioridad
+        {
+            title: "Prioridad",
+            field: "_priority",
+            width: 100,
+            hozAlign: "left",
+            headerSort: true,
+            editable: false, 
+            frozen: true, 
+            
+            // (Documentación de Google: INICIO DE LA MODIFICACIÓN v12.0)
+            // Sorter multi-nivel:
+            // Nivel 1: Prioridad (Alta > Media > Baja)
+            // Nivel 2: Antigüedad (Mayor > Menor)
+            sorter: function(a, b, aRow, bRow, column, dir, sorterParams){
+                // a y b son los valores de la celda (ej. "Alta", "Media")
+                
+                // (Documentación de Google: Nivel 1 - Comparar Prioridad)
+                const priorityMap = { "Alta": 3, "Media": 2, "Baja": 1, "": 0, null: 0 };
+                const aPrioVal = priorityMap[a] || 0;
+                const bPrioVal = priorityMap[b] || 0;
+                
+                const prioDiff = aPrioVal - bPrioVal;
+                
+                if (prioDiff !== 0) {
+                    // (Documentación de Google: Las prioridades son
+                    //  diferentes, devuelve la diferencia)
+                    // (ej. 3 - 2 = 1. A > B)
+                    return prioDiff;
+                }
+                
+                // (Documentación de Google: Nivel 2 - Prioridades Iguales)
+                // Las prioridades son iguales,
+                // comparar por 'Invoice Date Age'.
+                
+                // (Documentación de Google: Obtiene los datos de
+                //  ambas filas)
+                const aData = aRow.getData();
+                const bData = bRow.getData();
+
+                // (Documentación de Google: Obtiene la antigüedad.
+                //  Convierte a Número)
+                const aAge = Number(aData['Invoice Date Age']) || 0;
+                const bAge = Number(bData['Invoice Date Age']) || 0;
+                
+                // (Documentación de Google: Devuelve la diferencia
+                //  de antigüedad. El usuario quiere Mayor > Menor,
+                //  así que (A - B) es correcto.)
+                // (ej. 10 - 5 = 5. A (10) > B (5))
+                return aAge - bAge; 
+            }
+            // (Documentación de Google: FIN DE LA MODIFICACIÓN v12.0)
         }
     ];
 
 
-    // 7. (Sin cambios) Añade dinámicamente el resto de las columnas visibles.
+    // 7. (¡MODIFICADO v10.1!) Añade dinámicamente el resto de las columnas visibles.
     columnasVisibles.forEach(colName => {
-        // Omite '_row_id' porque ya se añadió manualmente.
-        if (colName === '_row_id') {
+        // (Documentación de Google: Omite las columnas ya
+        //  añadidas manualmente Y la "Priority" original)
+        // (¡MODIFICADO v10.1! Se quita '_row_status' de esta
+        //  condición para que SÍ se renderice aquí)
+        if (colName === '_row_id' || 
+            colName === '_priority' || 
+            colName === 'Priority') {
             return; 
         }
-
-        // Define el título (ej. '_row_status' -> 'Row Status').
+        
+        // (Documentación de Google: ¡MODIFICADO v10.1!
+        //  Se restaura la lógica de formateo de título
+        //  para '_row_status')
         const colTitle = (colName === '_row_status') ? "Row Status" : colName;
         
         // --- (Inicio Lógica de Editor - Sin cambios v7.25) ---
@@ -1002,8 +1343,16 @@ function renderTable(data = null, forceClear = false) {
         let editorParams = {};
         let formatter = undefined;
         let mutatorEdit = undefined;
+        let isEditable = true; 
         
-        if (dateColumns.has(colName)) {
+        // (Documentación de Google: ¡MODIFICADO v10.1!
+        //  Añade una regla para que '_row_status'
+        //  no sea editable)
+        if (colName === '_row_status') {
+            isEditable = false;
+            editorType = undefined;
+        }
+        else if (dateColumns.has(colName)) {
             editorType = "date";
             mutatorEdit = function(value, data, type, params, component) {
                 if (!value) { return null; }
@@ -1054,7 +1403,8 @@ function renderTable(data = null, forceClear = false) {
         columnDefs.push({
             title: colTitle,
             field: colName,
-            editor: editorType,
+            editor: isEditable ? editorType : undefined, 
+            editable: isEditable, 
             editorParams: editorParams,
             mutatorEdit: mutatorEdit, // Asigna el mutator
             formatter: formatter,     // Asigna el formateador
@@ -1090,20 +1440,31 @@ function renderTable(data = null, forceClear = false) {
         tabulatorInstance = new Tabulator(resultsTableDiv, {
             // (Documentación de Google: Inicio de la configuración)
             
+            // --- ¡INICIO DEL BLOQUE DE PRIORIDAD v8.0! ---
+            // (v8.5) Usa 'div.tabulator-row'
+            rowFormatter: function(row) {
+                const data = row.getData();
+                const element = row.getElement(); // Esto es el div.tabulator-row
+                
+                element.classList.remove('priority-alta', 'priority-media', 'priority-baja');
+                
+                if (data._priority === 'Alta') {
+                    element.classList.add('priority-alta');
+                } else if (data._priority === 'Media') {
+                    element.classList.add('priority-media');
+                } else if (data._priority === 'Baja') {
+                    element.classList.add('priority-baja');
+                }
+            },
+            // --- FIN DEL BLOQUE DE PRIORIDAD ---
+            
             // (v7.28) Le dice a Tabulator que use el campo '_row_id'
             // como la clave primaria.
             index: "_row_id", 
             
             virtualDom: true, // (Sin cambios) Optimización de renderizado
             
-            // --- ¡INICIO DE LA CORRECCIÓN (v7.31)! ---
-            // (!!! ELIMINADO !!!)
-            // height: "65vh",
-            // (Documentación de Google: Se elimina esta línea.
-            // La altura ahora se controla 100% por CSS
-            // en 'static/style.css' en la clase
-            // '.table-container-flotante')
-            // --- FIN DE LA CORRECCIÓN (v7.31) ---
+            // (v7.31) Altura controlada por CSS
             
             data: dataToRender, // (Sin cambios) Datos iniciales
             columns: columnDefs, // (Sin cambios) Columnas definidas arriba
@@ -1113,7 +1474,7 @@ function renderTable(data = null, forceClear = false) {
             // (Documentación de Google: Fin de la configuración)
         });
 
-        // --- 11. LISTENER DE EDICIÓN (Sin cambios, v7.21) ---
+        // --- 11. LISTENER DE EDICIÓN (¡MODIFICADO! v10.0) ---
         // (Documentación de Google: Se activa DESPUÉS de que el usuario
         // edita una celda en la UI).
         tabulatorInstance.on("cellEdited", async function(cell){
@@ -1142,7 +1503,14 @@ function renderTable(data = null, forceClear = false) {
 
             // (Sin cambios) Llama a la API de actualización.
             console.log(`Guardando... Fila ID: ${rowId}, Col: ${colField}, Nuevo Valor: ${newValue}`);
-            cell.getRow().getElement().style.backgroundColor = "#FFF9E5"; 
+            
+            // (Documentación de Google: Solución v8.4)
+            // Añade una comprobación 'if (rowElement)'
+            const rowElement = cell.getRow().getElement();
+            if (rowElement) {
+                // (v8.5) El resaltado debe ser sobre el 'rowElement'
+                rowElement.style.backgroundColor = "#FFF9E5";
+            }
             
             try {
                 // (Sin cambios) Llama a la API del backend.
@@ -1169,12 +1537,63 @@ function renderTable(data = null, forceClear = false) {
                 undoHistoryCount = result.history_count;
                 updateActionButtonsVisibility();
 
+                // (Documentación de Google: Obtiene la fila y
+                //  el elemento una vez)
+                const row = cell.getRow();
+
+                // --- ¡INICIO BLOQUE PRIORIDAD v8.0! ---
+                if (result.new_priority) {
+                    console.log(`Actualizando prioridad a: ${result.new_priority}`);
+                    if (rowElement) {
+                        rowElement.classList.remove('priority-alta', 'priority-media', 'priority-baja');
+                        
+                        if (result.new_priority === 'Alta') {
+                            rowElement.classList.add('priority-alta');
+                        } else if (result.new_priority === 'Media') {
+                            rowElement.classList.add('priority-media');
+                        } else if (result.new_priority === 'Baja') {
+                            rowElement.classList.add('priority-baja');
+                        }
+                    }
+                    row.update({_priority: result.new_priority});
+                }
+                // --- FIN BLOQUE PRIORIDAD ---
+
+                // --- ¡INICIO BLOQUE ROW STATUS v10.0! ---
+                // (Documentación de Google: Comprueba si la API
+                //  devolvió un nuevo estado de fila)
+                if (result.new_row_status) {
+                    console.log(`Actualizando Row Status a: ${result.new_row_status}`);
+                    // (Documentación de Google: Actualiza el dato
+                    //  en la celda '_row_status' de Tabulator)
+                    row.update({_row_status: result.new_row_status});
+                }
+                // --- FIN BLOQUE ROW STATUS ---
+
+                // --- ¡INICIO BLOQUE LIMPIEZA v10.0! ---
+                // (Documentación de Google: Quita el resaltado
+                //  amarillo DESPUÉS de que todas las
+                //  actualizaciones (prioridad, status) se apliquen)
+                if (rowElement) {
+                    rowElement.style.backgroundColor = "";
+                    // (Documentación de Google: Vuelve a formatear
+                    //  la fila para aplicar el color de prioridad
+                    //  (por si el status cambió pero la prioridad no))
+                    row.reformat();
+                }
+                // --- FIN BLOQUE LIMPIEZA ---
+
+
             } catch (error) {
                 // (Sin cambios) Manejo de error de API.
                 console.error("Error al guardar celda:", error);
                 alert("Error al guardar el cambio: " + error.message + "\n\nEl cambio será revertido localmente.");
                 cell.restoreOldValue();
-                cell.getRow().getElement().style.backgroundColor = ""; 
+                
+                // (Documentación de Google: Solución v8.4)
+                if (rowElement) {
+                    rowElement.style.backgroundColor = ""; 
+                }
             }
         });
         
@@ -1187,7 +1606,7 @@ function renderTable(data = null, forceClear = false) {
 
 
 // ---
-// SECCIÓN 5: LÓGICA DE VISTAS (Sin cambios)
+// SECCIÓN 5: LÓGICA DE VISTAS (¡MODIFICADO v8.0!)
 // ---
 
 /**
@@ -1372,7 +1791,7 @@ function toggleView(view, force = false) {
 }
 
 function populateGroupDropdown() {
-    // ... (Sin cambios desde v7.30) ...
+    // ... (¡MODIFICADO v8.0!) ...
     const select = document.getElementById('select-columna-agrupar');
     if (!select) return; 
     
@@ -1387,7 +1806,14 @@ function populateGroupDropdown() {
     opcionesValidas.forEach(colName => {
         const option = document.createElement('option');
         option.value = colName;
-        option.textContent = (colName === '_row_status') ? "Row Status" : colName;
+        // (¡MODIFICADO v8.0!) Formatea nombres internos
+        if (colName === '_row_status') {
+            option.textContent = "Row Status";
+        } else if (colName === '_priority') {
+            option.textContent = "Prioridad";
+        } else {
+            option.textContent = colName;
+        }
         select.appendChild(option);
     });
 
@@ -1403,13 +1829,11 @@ async function handleGroupColumnChange() {
 
 /**
  * @description Renderiza la tabla AGRUPADA.
- * ¡FUNCIÓN MODIFICADA! (v7.31)
+ * (¡MODIFICADO v8.0!)
  */
 function renderGroupedTable(data, colAgrupada, forceClear = false) {
     // (Documentación de Google: Inicio de la función)
-    // Propósito: Renderiza la tabla de datos agrupados.
-    // v7.31: Se elimina 'height: "65vh"' para que el CSS
-    // controle la altura de la tabla.
+    // v8.0: Añade formateo para el nombre de la columna _priority
     // (Fin de la documentación de Google)
     
     // 1. (Sin cambios) Obtiene el contenedor.
@@ -1436,10 +1860,12 @@ function renderGroupedTable(data, colAgrupada, forceClear = false) {
         return;
     }
 
-    // 4. (Sin cambios) Mapea los encabezados para traducción.
+    // 4. (¡MODIFICADO v8.0!) Mapea los encabezados para traducción.
     const headersMap = {};
     if (colAgrupada) { 
         headersMap[colAgrupada] = (colAgrupada === '_row_status') ? "Row Status" : colAgrupada;
+        // (¡NUEVO v8.0!)
+        if (colAgrupada === '_priority') { headersMap[colAgrupada] = "Prioridad"; }
     }
     headersMap["Total_sum"] = i18n['group_total_amount'] || "Total Amount";
     headersMap["Total_mean"] = i18n['group_avg_amount'] || "Avg Amount";
@@ -1475,26 +1901,20 @@ function renderGroupedTable(data, colAgrupada, forceClear = false) {
         groupedTabulatorInstance.destroy();
     }
     
-    // 7. (¡MODIFICADO!) Crea la NUEVA instancia.
+    // 7. (Sin cambios v7.31) Crea la NUEVA instancia.
     console.log("Tabulator (Agrupada): Creando nueva instancia.");
     groupedTabulatorInstance = new Tabulator(resultsTableDiv, {
         data: data, // (Sin cambios)
         columns: columnDefs, // (Sin cambios)
         layout: "fitData", // (Sin cambios)
-        
-        // --- ¡INICIO DE LA CORRECCIÓN (v7.31)! ---
-        // (!!! ELIMINADO !!!)
-        // height: "65vh",    
-        // (Documentación de Google: Se elimina esta línea.)
-        // --- FIN DE LA CORRECCIÓN (v7.31) ---
-        
+        // (v7.31) Altura controlada por CSS
         movableColumns: true, // (Sin cambios)
     });
 }
 
 /**
- * @description (Sin cambios desde v7.30)
- * Añade "N° Fila" (_row_id) al dropdown de filtros.
+ * @description (¡MODIFICADO v8.1!)
+ * Añade "N° Fila", "Row Status" y "Prioridad" al dropdown de filtros.
  */
 function populateColumnDropdowns() {
     const colSelect = document.getElementById('select-columna');
@@ -1503,13 +1923,22 @@ function populateColumnDropdowns() {
     colSelect.innerHTML = `<option value="">${i18n['column_select'] || 'Select col...'}</option>`;
     
     todasLasColumnas.forEach(col => {
+        
+        // (SOLUCIÓN v8.1) Oculta la columna "Priority" original
+        if (col === 'Priority') {
+            return;
+        }
+        
         const option = document.createElement('option'); 
         option.value = col; 
         
+        // (¡MODIFICADO v8.0!) Formatea nombres internos
         if (col === '_row_id') {
             option.textContent = "N° Fila"; // Texto amigable
         } else if (col === '_row_status') {
             option.textContent = "Row Status";
+        } else if (col === '_priority') {
+            option.textContent = "Prioridad";
         } else {
             option.textContent = col;
         }
@@ -1522,7 +1951,7 @@ function populateColumnDropdowns() {
 
 
 // ---
-// ¡BLOQUE DE INICIALIZACIÓN! (Sin cambios)
+// ¡BLOQUE DE INICIALIZACIÓN! (¡MODIFICADO v11.0!)
 // ---
 document.addEventListener('DOMContentLoaded', async (event) => {
     
@@ -1533,6 +1962,8 @@ document.addEventListener('DOMContentLoaded', async (event) => {
             console.log("Sesión activa encontrada:", SESSION_DATA.file_id);
             currentFileId = SESSION_DATA.file_id;
             todasLasColumnas = SESSION_DATA.columnas;
+            
+            // (¡MODIFICADO v8.0!) Setea todas las columnas como base
             columnasVisibles = [...todasLasColumnas];
             
             if (SESSION_DATA.autocomplete_options) {
@@ -1540,7 +1971,14 @@ document.addEventListener('DOMContentLoaded', async (event) => {
             }
 
             populateColumnDropdowns();
+            
+            // (v11.0) Llama a renderColumnSelector() ANTES
+            // de updateVisible...
             renderColumnSelector();
+            
+            // (¡NUEVO v8.1!) Llama a update para asegurar que las
+            // columnas internas se añadan Y la "Priority" original se quite
+            updateVisibleColumnsFromCheckboxes();
             
             undoHistoryCount = SESSION_DATA.history_count || 0;
             console.log(`Historial de deshacer cargado: ${undoHistoryCount} cambios.`);
@@ -1555,6 +1993,9 @@ document.addEventListener('DOMContentLoaded', async (event) => {
             updateActionButtonsVisibility();
         }
         
+        // (¡MODIFICADO v9.0!)
+        // Mueve setupEventListeners aquí para que se llame
+        // SIN IMPORTAR si hay sesión o no (así el 'drag' funciona)
         setupEventListeners(); 
         
     } catch (e) {

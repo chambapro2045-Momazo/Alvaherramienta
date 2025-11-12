@@ -51,6 +51,17 @@
             {{ get_text(lang, 'manage_lists_button') }}
         </button>
         
+        <h3 style="margin-top: 1.5rem;">5. Guardar/Cargar Vista</h3>
+        <div class="column-toggle-buttons">
+            <button id="btn-save-view" class="btn-small-link" style="width: 100%;">
+                <i class="fas fa-save" style="margin-right: 8px;"></i> Guardar Vista Actual (.json)
+            </button>
+            
+            <label for="input-load-view" class="btn-small-link" style="width: 100%; text-align: center; cursor: pointer; margin-bottom: 0;">
+                <i class="fas fa-folder-open" style="margin-right: 8px;"></i> Cargar Vista (.json)
+            </label>
+            <input type="file" id="input-load-view" accept=".json" style="display: none;">
+        </div>
         </aside>
 
     <main class="content">
@@ -97,22 +108,22 @@
                 <div id="active-filters-list" style="flex-grow: 1; display: flex; flex-wrap: wrap; gap: 0.5rem;">
                     </div>
                 
-                <button id="btn-add-row" class="btn-verde-secundario" style="display: none;" title="Añade una nueva fila en blanco al final">
+                <button id="btn-add-row" class="btn-verde-secundario" style="display: none;" title="Añade una nueva fila en blanco al final (Hotkey: A)">
                     Añadir Fila
                 </button>
                 
-                <button id="btn-commit-changes" class="btn-verde-secundario" style="display: none;" title="Guarda todos los cambios como 'estables' y limpia el historial de deshacer">
+                <button id="btn-commit-changes" class="btn-verde-secundario" style="display: none;" title="Guarda todos los cambios como 'estables' y limpia el historial de deshacer (Hotkey: S)">
                     Consolidar Cambios
                 </button>
 
-                <button id="btn-undo-change" class="btn-rojo-secundario" style="display: none;" title="Deshace la última edición de celda">
+                <button id="btn-undo-change" class="btn-rojo-secundario" style="display: none;" title="Deshace la última edición de celda (Hotkey: Z)">
                     Deshacer
                 </button>
                 
-                <button id="btn-clear-filters" class="btn-rojo-secundario" style="display: none;">{{ get_text(lang, 'clear_all_button') }}</button>
+                <button id="btn-clear-filters" class="btn-rojo-secundario" style="display: none;" title="(Hotkey: Delete)">{{ get_text(lang, 'clear_all_button') }}</button>
                 
                 <div class="search-wrapper">
-                    <input type="text" id="input-search-table" placeholder="{{ get_text(lang, 'search_text') }}...">
+                    <input type="text" id="input-search-table" placeholder="{{ get_text(lang, 'search_text') }}... (Hotkey: F)">
                     <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                     </svg>
@@ -120,7 +131,7 @@
             </div>
             <div style="position: relative; flex-grow: 1; min-height: 0;">
                 <div class="table-actions">
-                    <button id="btn-fullscreen" class="icon-button" title="Pantalla Completa">
+                    <button id="btn-fullscreen" class="icon-button" title="Pantalla Completa (Hotkey: G)">
                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" /></svg>
                     </button>
                     <button id="btn-download-excel" class="icon-button" title="{{ get_text(lang, 'download_button').replace('JSON', 'Excel') }}">
@@ -138,12 +149,12 @@
             <div class="table-controls">
                 <div id="active-filters-list-grouped" style="flex-grow: 1; display: flex; flex-wrap: wrap; gap: 0.5rem;">
                     </div>
-                <button id="btn-clear-filters-grouped" class="btn-rojo-secundario" style="display: none;">{{ get_text(lang, 'clear_all_button') }}</button>
+                <button id="btn-clear-filters-grouped" class="btn-rojo-secundario" style="display: none;" title="(Hotkey: Delete)">{{ get_text(lang, 'clear_all_button') }}</button>
             </div>
 
             <div style="position: relative; flex-grow: 1; min-height: 0;">
                 <div class="table-actions">
-                    <button id="btn-fullscreen-grouped" class="icon-button" title="Pantalla Completa">
+                    <button id="btn-fullscreen-grouped" class="icon-button" title="Pantalla Completa (Hotkey: G)">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" /></svg>
                     </button>
                     <button id="btn-download-excel-grouped" class="icon-button" title="{{ get_text(lang, 'download_button').replace('JSON', 'Excel') }}">

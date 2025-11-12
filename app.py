@@ -1,4 +1,4 @@
-# app.py (Versión 7.7 - Restaurar fila en la posición original)
+# app.py (Versión 10.0 - Estado de Fila Dinámico)
 
 import os
 import pandas as pd
@@ -10,17 +10,17 @@ from flask_cors import CORS
 from flask_session import Session 
 
 # --- Importar tus módulos ---
-from modules.loader import cargar_datos
+# (MODIFICADO v8.0) Importa la lógica de asignación de prioridad
+from modules.loader import cargar_datos, _assign_priority 
 from modules.filters import aplicar_filtros_dinamicos
 from modules.translator import get_text, LANGUAGES
-from modules.json_manager import cargar_json, guardar_json 
+from modules.json_manager import cargar_json, guardar_json, USER_LISTS_FILE 
+from modules.autocomplete import get_autocomplete_options
 
-# Ruta al archivo de autocompletado
-USER_LISTS_FILE = 'user_autocomplete.json'
 # Límite de la Pila de Deshacer (Undo Stack)
 UNDO_STACK_LIMIT = 15
 
-# --- (Función _find_monto_column sin cambios) ---
+# --- (Función _find_monto_column sin cambios v7.9) ---
 def _find_monto_column(df):
     """Intenta encontrar la columna de monto en el DataFrame."""
     possible_names = ['monto', 'total', 'amount', 'total amount']
@@ -40,10 +40,11 @@ def _check_file_id(request_file_id):
         session.clear()
         raise Exception("El file_id no coincide con la sesión. Por favor, recargue el archivo.")
 
-# --- (Función _calculate_kpis sin cambios) ---
+# --- (Función _calculate_kpis sin cambios v7.9) ---
 def _calculate_kpis(df: pd.DataFrame) -> dict:
     """
     Calcula los KPIs (Monto Total, Promedio, Conteo) desde un DataFrame.
+    (Lógica "on-the-fly" v7.7/v7.9)
     """
     monto_total = 0.0
     monto_promedio = 0.0
@@ -58,102 +59,13 @@ def _calculate_kpis(df: pd.DataFrame) -> dict:
             monto_total = monto_numerico.sum()
             monto_promedio = monto_numerico.mean()
         except Exception as e:
-            print(f"Error al calcular resumen: {e}")
+            print(f"Error al calcular resumen (lógica v7.7): {e}")
 
     return {
         "total_facturas": total_facturas,
         "monto_total": f"${monto_total:,.2f}", 
         "monto_promedio": f"${monto_promedio:,.2f}"
     }
-
-# --- (Función cargar_listas_usuario sin cambios) ---
-def cargar_listas_usuario():
-    """Carga las listas personalizadas desde user_autocomplete.json"""
-    return cargar_json(USER_LISTS_FILE)
-
-# --- (Función get_autocomplete_options v7.5 sin cambios) ---
-def get_autocomplete_options(df: pd.DataFrame) -> dict:
-    """
-    Toma un DataFrame y genera las opciones de autocompletado
-    fusionándolas con las listas guardadas por el usuario.
-    
-    ¡NUEVO! Esta lógica (v7.5) usa dict.get() para ser 100%
-    segura contra KeyErrors, incluso si el archivo JSON
-    no tiene las claves.
-
-    Args:
-        df (pd.DataFrame): El DataFrame del cual extraer los valores únicos.
-
-    Returns:
-        dict: Un diccionario donde la clave es el nombre REAL de la columna
-              del DataFrame (ej. "Pay Group") y el valor es la lista de opciones.
-    """
-    # 1. Carga las listas que el usuario haya guardado permanentemente.
-    #    (Garantizado por cargar_json() que esto es un dict).
-    listas_de_usuario = cargar_json(USER_LISTS_FILE)
-    
-    # 2. Prepara el diccionario de respuesta.
-    autocomplete_options = {}
-
-    # 3. Define la lista "CANÓNICA" de columnas que queremos con autocompletado.
-    #    (Estos son los nombres "ideales" que buscaremos en el JSON).
-    columnas_target_canonicas = [
-        "Vendor Name", "Status", "Assignee", 
-        "Operating Unit Name", "Pay Status", "Document Type", "_row_status",
-        "Pay group", "WEC Email Inbox", "Sender Email", 
-        "Currency Code", "payment method"
-    ]
-    
-    # 4. Crea un mapa de las columnas *reales* del Excel (en minúsculas)
-    #    a su nombre real (con mayúsculas).
-    #    (Ej: {"pay group": "Pay Group", "status": "Status"})
-    df_cols_lower_map = {col.lower(): col for col in df.columns}
-
-    # 5. Itera sobre la lista "CANÓNICA" (nuestra lista de deseos).
-    for canonical_name in columnas_target_canonicas:
-        
-        # 6. Prepara el 'set' para combinar opciones para esta columna.
-        opciones_combinadas = set()
-        
-        # --- ¡LÓGICA DE CORRECCIÓN (INICIO)! ---
-        # 7. (Prioridad 1) Obtiene las listas del JSON de forma segura.
-        #    Usa .get() para buscar la lista. Si "Pay group" no existe
-        #    en el JSON, .get() devuelve 'None' (o una lista vacía).
-        #    Esto NUNCA lanzará un KeyError.
-        lista_guardada = listas_de_usuario.get(canonical_name)
-        
-        # 8. Si la lista guardada existe (no es None) y es una lista,
-        #    añade su contenido.
-        if isinstance(lista_guardada, list):
-            opciones_combinadas.update(lista_guardada)
-        # --- ¡LÓGICA DE CORRECCIÓN (FIN)! ---
-
-        # 9. (Prioridad 2) Busca la columna correspondiente en el Excel,
-        #    ignorando mayúsculas/minúsculas.
-        #    (Ej. busca "pay group" en el mapa de columnas del Excel).
-        df_col_name_real = df_cols_lower_map.get(canonical_name.lower())
-        
-        # 10. Si encontramos la columna en el Excel (ej. "Pay Group")...
-        if df_col_name_real:
-            # Escanea el DataFrame usando el nombre REAL (ej. "Pay Group").
-            valores_unicos_excel = df[df_col_name_real].astype(str).unique()
-            opciones_limpias_excel = [
-                val for val in valores_unicos_excel 
-                if val and pd.notna(val) and val.strip() != ""
-            ]
-            # Añade los valores del Excel al 'set'.
-            opciones_combinadas.update(opciones_limpias_excel)
-        
-        # 11. Si al final tenemos opciones (del JSON o del Excel)...
-        if opciones_combinadas:
-            # 12. Asigna la lista de opciones al diccionario final.
-            #     Usamos el nombre real del Excel si existe, si no,
-            #     usamos el nombre canónico (para listas solo-JSON).
-            key_name = df_col_name_real if df_col_name_real else canonical_name
-            autocomplete_options[key_name] = sorted(list(opciones_combinadas))
-             
-    # 13. Devuelve el diccionario completo.
-    return autocomplete_options
 
 # --- (Funciones _get_df_from_session, _get_df_from_session_as_df sin cambios) ---
 def _get_df_from_session(key='df_staging'):
@@ -170,6 +82,45 @@ def _get_df_from_session_as_df(key='df_staging') -> pd.DataFrame:
     """
     data_list_of_dicts = _get_df_from_session(key)
     return pd.DataFrame.from_records(data_list_of_dicts)
+
+
+# --- ¡NUEVA FUNCIÓN v10.0! ---
+def _check_row_completeness(fila: dict) -> str:
+    """
+    (Documentación de Google: Inicio de la función)
+    Propósito:
+    Revisa una fila (dict) para determinar si está
+    'Completo' o 'Incompleto'. (Lógica v10.0)
+    
+    La lógica replica la de 'loader.py': una fila es
+    incompleta si CUALQUIER celda (que no sea interna)
+    está vacía ("") o es cero ("0").
+    
+    Args:
+        fila (dict): El diccionario de la fila.
+        
+    Returns:
+        str: "Completo" o "Incompleto".
+    (Documentación de Google: Fin de la función)
+    """
+    # (Documentación de Google: Itera sobre las celdas)
+    for key, value in fila.items():
+        # (Documentación de Google: Ignora las columnas internas)
+        if key.startswith('_'):
+            continue
+        
+        # (Documentación de Google: Limpia el valor para la comprobación)
+        val_str = str(value).strip()
+        
+        # (Documentación de Google: Comprueba la condición
+        #  de "incompleto")
+        if val_str == "" or val_str == "0":
+            return "Incompleto"
+    
+    # (Documentación de Google: Si el bucle termina,
+    #  la fila está completa)
+    return "Completo"
+# --- FIN DE NUEVA FUNCIÓN ---
 
 
 # --- Configuración de Flask (Sin cambios) ---
@@ -231,9 +182,20 @@ def get_translations():
 # --- (Fin de APIs de Idioma) ---
 
 
-# --- (API de carga sin cambios) ---
+# --- (API /api/upload MODIFICADA v8.0) ---
 @app.route('/api/upload', methods=['POST'])
 def upload_file():
+    """
+    (Documentación de Google: Inicio de la función)
+    Propósito:
+    Carga el archivo.
+    
+    Versión 8.0:
+    - (¡MODIFICADO!) Ahora `cargar_datos` devuelve (df, pay_group_col_name).
+    - (¡MODIFICADO!) Almacena `pay_group_col_name` en la sesión
+      para que la API de edición sepa qué columna recalcular.
+    (Documentación de Google: Fin de la función)
+    """
     if 'file' not in request.files: return jsonify({"error": "No file part"}), 400
     file = request.files['file']
     if file.filename == '': return jsonify({"error": "No selected file"}), 400
@@ -244,7 +206,10 @@ def upload_file():
     
     try:
         session.clear()
-        df = cargar_datos(file_path)
+        
+        # (Documentación de Google: 1. Llama a cargar_datos)
+        df, pay_group_col_name = cargar_datos(file_path)
+        
         if df.empty: raise Exception("File is empty or corrupt")
         
         df = df.reset_index().rename(columns={'index': '_row_id'})
@@ -254,6 +219,10 @@ def upload_file():
         session['df_staging'] = data_dict_list  
         session['history'] = []                 
         session['file_id'] = file_id
+        
+        # (Documentación de Google: 2. Guarda el nombre de la
+        #     columna "Pay Group" en la sesión)
+        session['pay_group_col_name'] = pay_group_col_name
 
         if os.path.exists(file_path):
             os.remove(file_path)
@@ -293,12 +262,25 @@ def save_autocomplete_lists():
 # --- APIS DE EDICIÓN ---
 # ---
 
-# --- (API /api/update_cell sin cambios) ---
+# --- ¡API /api/update_cell MODIFICADA! ---
 @app.route('/api/update_cell', methods=['POST'])
 def update_cell():
     """
+    (Documentación de Google: Inicio de la función)
+    Propósito:
     Actualiza una celda en 'df_staging', guarda en 'history'
     y recalcula los KPIs.
+    
+    Versión 10.0:
+    - (¡MODIFICADO!) Llama a `_check_row_completeness`
+      para recalcular el `_row_status` dinámicamente.
+    - (¡MODIFICADO!) Devuelve `new_row_status` al frontend.
+    
+    Versión 8.0:
+    - (¡MODIFICADO!) Recalcula `_priority` si la columna
+      "Pay Group" es editada.
+    - (¡MODIFICADO!) Devuelve `new_priority`.
+    (Documentación de Google: Fin de la función)
     """
     try:
         data = request.json
@@ -314,6 +296,11 @@ def update_cell():
         datos_staging_lista = _get_df_from_session('df_staging')
         history_stack = session.get('history', [])
         
+        # (Documentación de Google: Variables para los
+        #  nuevos valores dinámicos)
+        new_priority_for_frontend = None
+        new_status_for_frontend = None
+        
         fila_modificada = False
         for fila in datos_staging_lista:
             if str(fila.get('_row_id')) == str(row_id): 
@@ -327,7 +314,9 @@ def update_cell():
                         "status": "no_change", 
                         "message": "El valor es el mismo, no se guardó.",
                         "history_count": len(history_stack),
-                        "resumen": resumen_kpis 
+                        "resumen": resumen_kpis,
+                        "new_priority": fila.get('_priority'),
+                        "new_row_status": fila.get('_row_status') # (v10.0)
                     })
 
                 change_obj = {
@@ -342,7 +331,33 @@ def update_cell():
                 if len(history_stack) > UNDO_STACK_LIMIT:
                     history_stack.pop(0) 
 
+                # (Documentación de Google: 1. Actualiza el valor)
                 fila[columna] = nuevo_valor
+                
+                # --- (INICIO LÓGICA DE PRIORIDAD v8.0) ---
+                # (Documentación de Google: 2. Obtiene el nombre de la
+                #     columna "Pay Group" de la sesión)
+                pay_group_col_name = session.get('pay_group_col_name')
+                
+                # (Documentación de Google: 3. Comprueba si la columna
+                #     que acabamos de editar ES la columna "Pay Group")
+                if pay_group_col_name and columna == pay_group_col_name:
+                    # (Documentación de Google: 4. Sí lo es.
+                    #     Recalcula la prioridad de esta fila)
+                    fila['_priority'] = _assign_priority(nuevo_valor)
+                
+                # (Documentación de Google: 5. Guarda la prioridad
+                #     actual (nueva o antigua) para devolverla)
+                new_priority_for_frontend = fila.get('_priority')
+                # --- (FIN LÓGICA DE PRIORIDAD v8.0) ---
+                
+                # --- (INICIO LÓGICA DE ROW STATUS v10.0) ---
+                # (Documentación de Google: 6. Recalcula el estado
+                #     de la fila (Completo/Incompleto))
+                fila['_row_status'] = _check_row_completeness(fila)
+                new_status_for_frontend = fila['_row_status']
+                # --- (FIN LÓGICA DE ROW STATUS v10.0) ---
+                
                 fila_modificada = True
                 break 
         
@@ -359,7 +374,9 @@ def update_cell():
             "status": "success", 
             "message": f"Fila {row_id} actualizada.",
             "history_count": len(history_stack),
-            "resumen": resumen_kpis 
+            "resumen": resumen_kpis,
+            "new_priority": new_priority_for_frontend, # (v8.0)
+            "new_row_status": new_status_for_frontend  # (v10.0)
         })
 
     except Exception as e:
@@ -372,23 +389,19 @@ def undo_change():
     """
     (Documentación de Google: Inicio de la función)
     Propósito:
-    Deshace la última acción (update, add, o delete) de 'history'
-    y la revierte en 'df_staging'.
+    Deshace la última acción.
     
-    Versión 7.7:
-    - 'undo update': (Sin cambios) revierte el valor de la celda.
-    - 'undo add': (Sin cambios) elimina la fila añadida.
-    - 'undo delete': (¡MODIFICADO!) Re-inserta la fila eliminada
-      en su 'original_index' (posición original en la lista),
-      en lugar de añadirla al final.
-    
-    Devuelve:
-    - JSON con el estado, KPIs, y el 'affected_row_id' para
-      que el frontend pueda hacer scroll a la fila modificada.
+    Versión 10.0:
+    - (¡MODIFICADO!) Al deshacer un 'update', también
+      recalcula el `_row_status`.
+      
+    Versión 8.0:
+    - (¡MODIFICADO!) Al deshacer un 'update', también
+      recalcula la prioridad si la columna afectada
+      era la de "Pay Group".
     (Documentación de Google: Fin de la función)
     """
     try:
-        # --- (Inicio de la función sin cambios) ---
         data = request.json
         file_id = data.get('file_id')
         _check_file_id(file_id)
@@ -401,12 +414,10 @@ def undo_change():
         action_type = last_action.get('action')
         
         datos_staging_lista = _get_df_from_session('df_staging')
-        # --- (Fin de la parte sin cambios) ---
         
         affected_row_id = None
         
         if action_type == 'update':
-            # --- (Lógica de 'update' sin cambios) ---
             row_id_to_revert = last_action.get('row_id')
             col_to_revert = last_action.get('columna')
             value_to_restore = last_action.get('old_val') 
@@ -414,7 +425,25 @@ def undo_change():
             fila_revertida = False
             for fila in datos_staging_lista:
                 if str(fila.get('_row_id')) == str(row_id_to_revert):
+                    # (Documentación de Google: 1. Restaura el valor)
                     fila[col_to_revert] = value_to_restore 
+                    
+                    # --- (INICIO LÓGICA DE PRIORIDAD v8.0) ---
+                    # (Documentación de Google: 2. Comprueba si la
+                    #     columna restaurada era la de "Pay Group")
+                    pay_group_col_name = session.get('pay_group_col_name')
+                    if pay_group_col_name and col_to_revert == pay_group_col_name:
+                        # (Documentación de Google: 3. Sí lo era.
+                        #     Recalcula la prioridad con el valor antiguo)
+                        fila['_priority'] = _assign_priority(value_to_restore)
+                    # --- (FIN LÓGICA DE PRIORIDAD v8.0) ---
+                    
+                    # --- (INICIO LÓGICA DE ROW STATUS v10.0) ---
+                    # (Documentación de Google: 4. Recalcula el
+                    #     estado de la fila)
+                    fila['_row_status'] = _check_row_completeness(fila)
+                    # --- (FIN LÓGICA DE ROW STATUS v10.0) ---
+                        
                     fila_revertida = True
                     break
             if not fila_revertida:
@@ -423,58 +452,43 @@ def undo_change():
             affected_row_id = row_id_to_revert
 
         elif action_type == 'add':
-            # --- (Lógica de 'add' sin cambios) ---
+            # (Documentación de Google: Lógica sin cambios)
             row_id_to_remove = last_action.get('row_id')
             datos_staging_lista = [fila for fila in datos_staging_lista if str(fila.get('_row_id')) != str(row_id_to_remove)]
             
         elif action_type == 'delete':
-            # --- ¡INICIO DE LA CORRECCIÓN (v7.7)! ---
-            # (Documentación de Google: Lógica de 'undo delete')
-            
-            # 1. (Sin cambios) Obtiene la fila que guardamos.
+            # (Documentación de Google: Lógica v7.7 sin cambios.
+            # La fila restaurada ya tiene su prioridad y status
+            # correctos.)
             row_to_restore = last_action.get('deleted_row')
-            # 2. (NUEVO v7.7) Obtiene el índice original que guardamos.
             original_index = last_action.get('original_index')
             
-            # 3. (Sin cambios) Validación.
             if not row_to_restore:
                 raise Exception("Error de consistencia: no se encontró 'deleted_row' para deshacer delete.")
 
-            # 4. (¡MODIFICADO! v7.7)
-            #    Comprueba si tenemos un índice válido.
             if original_index is not None and original_index >= 0:
-                # Si tenemos el índice (ej. 19), re-inserta la fila
-                # en esa posición exacta.
                 datos_staging_lista.insert(original_index, row_to_restore)
             else:
-                # Si no (por ej. una acción de borrado antigua
-                # antes de v7.7), usa el método antiguo (append).
                 datos_staging_lista.append(row_to_restore)
-            # (Documentación de Google: Fin de la lógica 'undo delete')
-
-            # 5. (Sin cambios) Obtiene el ID de la fila restaurada.
+            
             affected_row_id = row_to_restore.get('_row_id')
-            # --- FIN DE LA CORRECCIÓN (v7.7) ---
             
         else:
             raise Exception(f"Tipo de acción desconocida en el historial: {action_type}")
         
-        # --- (Lógica de guardado en sesión sin cambios) ---
         session['history'] = history_stack
         session['df_staging'] = datos_staging_lista
         
         df_staging_revertido = pd.DataFrame.from_records(datos_staging_lista)
         resumen_kpis = _calculate_kpis(df_staging_revertido)
-        # --- (Fin de la parte sin cambios) ---
         
-        # --- (Devolución del JSON sin cambios) ---
         return jsonify({
             "status": "success",
             "message": f"Acción '{action_type}' deshecha.",
-            "data": datos_staging_lista, 
+            "data": datos_staging_lista, # (Documentación de Google: Devuelve la data actualizada)
             "history_count": len(history_stack),
             "resumen": resumen_kpis,
-            "affected_row_id": affected_row_id # ¡Devuelve el ID!
+            "affected_row_id": affected_row_id
         })
 
     except Exception as e:
@@ -506,14 +520,21 @@ def commit_changes():
         print(f"Error en /api/commit_changes: {e}") 
         return jsonify({"error": str(e)}), 500
 
-# --- (API /api/add_row sin cambios) ---
+# --- (API /api/add_row MODIFICADA v8.0) ---
 @app.route('/api/add_row', methods=['POST'])
 def add_row():
     """
-    Añade una nueva fila en blanco a 'df_staging' y
-    registra la acción en 'history'.
-    ¡NUEVO! Asigna un ID secuencial (max_id + 1).
-    ¡NUEVO! Devuelve el 'new_row_id' para el scroll.
+    (Documentación de Google: Inicio de la función)
+    Propósito:
+    Añade una nueva fila en blanco.
+    
+    Versión 8.0:
+    - (¡MODIFICADO!) Asigna `_priority = 'Media'` (default)
+      a la nueva fila.
+      
+    (Documentación de Google: `_row_status` se asigna
+     automáticamente como "Incompleto" por la lógica v10.0)
+    (Documentación de Google: Fin de la función)
     """
     try:
         data = request.json
@@ -526,72 +547,59 @@ def add_row():
         if not datos_staging_lista:
             return jsonify({"error": "No hay datos cargados para añadir una fila."}), 400
             
-        # 1. Determina las columnas
         columnas = list(datos_staging_lista[0].keys())
-        # 2. Crea una fila nueva (diccionario)
         nueva_fila = {col: "" for col in columnas}
         
-        # --- ¡NUEVA LÓGICA DE ID! (Tu Punto 1) ---
-        # 3. Asigna un ID secuencial (max_id + 1)
-        #    Esto asegura que sea el siguiente número (ej. 6115)
         max_id = max([int(fila.get('_row_id', 0)) for fila in datos_staging_lista])
         nuevo_id = max_id + 1
         
         nueva_fila['_row_id'] = nuevo_id
-        # --- FIN DE LA LÓGICA DE ID ---
         
-        # 4. Añade la fila al "borrador"
+        # (Documentación de Google: Asigna valores por defecto
+        # a las columnas internas)
+        
+        # (v10.0) Llama a la lógica de status
+        nueva_fila['_row_status'] = _check_row_completeness(nueva_fila) 
+        # (v8.0) Llama a la lógica de prioridad
+        nueva_fila['_priority'] = _assign_priority(None)
+        
         datos_staging_lista.append(nueva_fila)
         
-        # 5. Guarda la acción en el historial
         change_obj = {
             'action': 'add',
-            'row_id': nuevo_id # Guardamos el ID para poder deshacerlo
+            'row_id': nuevo_id
         }
         history_stack.append(change_obj)
         if len(history_stack) > UNDO_STACK_LIMIT:
             history_stack.pop(0)
             
-        # 6. Guardar todo de vuelta en la sesión
         session['df_staging'] = datos_staging_lista
         session['history'] = history_stack
         
-        # 7. Recalcular KPIs
         df_staging_modificado = pd.DataFrame.from_records(datos_staging_lista)
         resumen_kpis = _calculate_kpis(df_staging_modificado)
         
-        # 8. Responder
         return jsonify({
             "status": "success", 
             "message": f"Nueva fila añadida (ID: {nuevo_id}).",
             "data": datos_staging_lista,
             "history_count": len(history_stack),
             "resumen": resumen_kpis,
-            "new_row_id": nuevo_id # ¡Devuelve el ID para el scroll! (Tu Punto 2)
+            "new_row_id": nuevo_id
         })
         
     except Exception as e:
         print(f"Error en /api/add_row: {e}") 
         return jsonify({"error": str(e)}), 500
 
-# --- ¡API /api/delete_row MODIFICADA! ---
+# --- (API /api/delete_row v7.7 sin cambios) ---
 @app.route('/api/delete_row', methods=['POST'])
 def delete_row():
     """
-    (Documentación de Google: Inicio de la función)
-    Propósito:
     Elimina una fila de 'df_staging' (basado en _row_id).
-    
-    Versión 7.7:
-    - (¡MODIFICADO!) Ahora usa 'enumerate' para encontrar el
-      índice (la posición) de la fila en la lista.
-    - (¡MODIFICADO!) Guarda tanto la 'deleted_row' (la fila)
-      como el 'original_index' (la posición) en el historial
-      para poder deshacer la acción correctamente.
-    (Documentación de Google: Fin de la función)
+    (Lógica v7.7 sin cambios)
     """
     try:
-        # 1. (Sin cambios) Obtener datos de la petición.
         data = request.json
         file_id = data.get('file_id')
         row_id_to_delete = data.get('row_id')
@@ -600,54 +608,35 @@ def delete_row():
         if row_id_to_delete is None:
             return jsonify({"error": "Falta row_id"}), 400
             
-        # 2. (Sin cambios) Obtener datos de la sesión.
         datos_staging_lista = _get_df_from_session('df_staging')
         history_stack = session.get('history', [])
         
-        # --- ¡INICIO DE LA CORRECCIÓN (v7.7)! ---
-        # (Documentación de Google: Lógica de 'delete_row')
-        
         fila_eliminada = None
         nuevos_datos_staging = []
-        # 3. (NUEVO v7.7) Variable para guardar el índice de la lista.
         indice_eliminado = -1 
         
-        # 4. (¡MODIFICADO! v7.7) Itera usando 'enumerate'
-        #    para obtener tanto el índice (i) como la fila (fila).
         for i, fila in enumerate(datos_staging_lista):
-            # Compara el _row_id (ej. 19)
             if str(fila.get('_row_id')) == str(row_id_to_delete):
-                # Si coincide, guarda la fila completa.
                 fila_eliminada = fila
-                # (NUEVO v7.7) Y guarda el índice de la lista (ej. 19).
                 indice_eliminado = i 
             else:
-                # Si no coincide, la añade a la nueva lista.
                 nuevos_datos_staging.append(fila)
-        # (Documentación de Google: Fin de la lógica 'delete_row')
-        # --- FIN DE LA CORRECCIÓN (v7.7) ---
                 
-        # 5. (Sin cambios) Validación.
         if not fila_eliminada:
             return jsonify({"error": f"No se encontró la fila con _row_id {row_id_to_delete}"}), 404
             
-        # 6. (¡MODIFICADO! v7.7)
-        #    Crea el objeto de historial guardando AMBAS cosas.
         change_obj = {
             'action': 'delete',
-            'deleted_row': fila_eliminada,  # La fila completa
-            'original_index': indice_eliminado # El índice donde estaba
+            'deleted_row': fila_eliminada,
+            'original_index': indice_eliminado
         }
-        # 7. (Sin cambios) Añade al historial y maneja el límite.
         history_stack.append(change_obj)
         if len(history_stack) > UNDO_STACK_LIMIT:
             history_stack.pop(0)
             
-        # 8. (Sin cambios) Guarda la *nueva* lista (sin la fila) en la sesión.
         session['df_staging'] = nuevos_datos_staging
         session['history'] = history_stack
         
-        # 9. (Sin cambios) Recalcula KPIs y responde.
         df_staging_modificado = pd.DataFrame.from_records(nuevos_datos_staging)
         resumen_kpis = _calculate_kpis(df_staging_modificado)
         
@@ -663,11 +652,13 @@ def delete_row():
         print(f"Error en /api/delete_row: {e}") 
         return jsonify({"error": str(e)}), 500
 
-# --- (API /api/filter sin cambios) ---
+# --- (API /api/filter sin cambios v7.9) ---
 @app.route('/api/filter', methods=['POST'])
 def filter_data():
     """
     Filtra el 'df_staging' y devuelve los resultados Y los KPIs.
+    (Documentación de Google: Esta API filtrará por _priority
+     y _row_status automáticamente si el frontend lo envía)
     """
     try:
         data = request.json
@@ -677,7 +668,6 @@ def filter_data():
         _check_file_id(file_id)
         df_staging = _get_df_from_session_as_df('df_staging')
 
-        # ¡Usa la nueva lógica de 'aplicar_filtros_dinamicos' (v3)!
         resultado_df_filtrado = aplicar_filtros_dinamicos(df_staging, filtros_recibidos)
 
         resumen_stats = _calculate_kpis(resultado_df_filtrado)
@@ -693,12 +683,13 @@ def filter_data():
         print(f"Error en /api/filter: {e}") 
         return jsonify({"error": str(e)}), 500
 
-# --- (API /api/download_excel sin cambios) ---
+# --- (API /api/download_excel sin cambios v7.9) ---
 @app.route('/api/download_excel', methods=['POST'])
 def download_excel():
     """
     Descarga la vista detallada (filtrada) actual.
-    ¡NUEVO! Renombra '_row_id' a 'N° Fila' y le suma 1.
+    (Documentación de Google: Exportará las columnas _priority
+     y _row_status si están visibles)
     """
     try:
         data = request.json
@@ -720,18 +711,13 @@ def download_excel():
              if columnas_existentes:
                  df_a_exportar = resultado_df[columnas_existentes]
 
-        # --- ¡LÓGICA DE 'N° Fila' SIMPLIFICADA! (Tu Punto 1) ---
         if '_row_id' in df_a_exportar.columns:
-            # Suma 1 a TODOS los IDs (ya sean originales o nuevos)
             df_a_exportar['_row_id'] = df_a_exportar['_row_id'].astype(int) + 1
-            # Renombra la columna
             df_a_exportar = df_a_exportar.rename(columns={'_row_id': 'N° Fila'})
             
-            # Mover la columna al principio
             cols = list(df_a_exportar.columns)
             cols.insert(0, cols.pop(cols.index('N° Fila')))
             df_a_exportar = df_a_exportar[cols]
-        # --- Fin de la modificación ---
 
         output_buffer = io.BytesIO()
         with pd.ExcelWriter(output_buffer, engine='xlsxwriter') as writer:
@@ -748,9 +734,13 @@ def download_excel():
         print(f"Error en /api/download_excel: {e}") 
         return "Error al generar el Excel", 500
 
-# --- (API /api/group_by sin cambios) ---
+# --- (API /api/group_by sin cambios v7.9) ---
 @app.route('/api/group_by', methods=['POST'])
 def group_data():
+    """
+    (Documentación de Google: Esta API agrupará por _priority
+     y _row_status automáticamente si el frontend lo envía)
+    """
     try:
         data = request.json
         file_id = data.get('file_id')
@@ -795,7 +785,7 @@ def group_data():
         print(f"Error en /api/group_by: {e}") 
         return jsonify({"error": str(e)}), 500
     
-# --- (API /api/download_excel_grouped sin cambios) ---
+# --- (API /api/download_excel_grouped sin cambios v7.9) ---
 @app.route('/api/download_excel_grouped', methods=['POST'])
 def download_excel_grouped():
     try:
@@ -832,7 +822,7 @@ def download_excel_grouped():
 
         lang = session.get('language', 'es')
         df_agrupado = df_agrupado.rename(columns={
-            columna_agrupar: columna_agrupar.replace('_row_status', 'Row Status'),
+            columna_agrupar: columna_agrupar.replace('_row_status', 'Row Status').replace('_priority', 'Prioridad'), # (Traduce la columna)
             'Total_sum': get_text(lang, 'group_total_amount'),
             'Total_mean': get_text(lang, 'group_avg_amount'),
             'Total_min': get_text(lang, 'group_min_amount'),

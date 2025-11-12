@@ -5,6 +5,10 @@ import os
 import json
 from typing import Dict, Any
 
+# (NUEVO) Constante movida desde app.py (v7.8)
+# Esta es la ruta al archivo que guarda las listas de autocompletado del usuario.
+USER_LISTS_FILE = 'user_autocomplete.json'
+
 def cargar_json(file_path: str) -> Dict[str, Any]:
     """
     Carga un archivo JSON desde la ruta especificada de forma segura.

@@ -1,4 +1,4 @@
- /* ===================================================================
+/* ===================================================================
    Archivo: static/style.css
    Versión: 11.0 (Refactorización Moderna Completa)
    Descripción: Un diseño limpio de dashboard con fondo gris claro
@@ -777,4 +777,49 @@ body.fullscreen-mode .table-actions {
 /* Al pasar el mouse sobre la *celda*, cambia el color del icono a rojo */
 .tabulator-cell:hover .delete-icon {
     color: var(--color-rojo); /* Rojo al hacer hover */
+}
+
+
+/* ==============================================================
+   ¡SOLUCIÓN v8.5! Estilos de Prioridad de Fila (¡EL BUENO!)
+=================================================================
+*/
+
+/* * (Documentación de Google: Reglas de Prioridad v8.5)
+ * ¡MODIFICADO! Apuntando a 'div.tabulator-row' en lugar de 'tr'.
+ * Este es el selector correcto para Tabulator v5.x
+ * Se mantiene el '#results-table' para alta especificidad.
+*/
+
+/* Prioridad ALTA: Rojo más notable */
+#results-table div.tabulator-row.priority-alta .tabulator-cell { 
+    background-color: #ffcdd2 !important; 
+}
+
+/* Prioridad MEDIA: Naranja más notable */
+#results-table div.tabulator-row.priority-media .tabulator-cell { 
+    background-color: #ffe0b2 !important; 
+}
+
+/* Prioridad BAJA: Amarillo más notable */
+#results-table div.tabulator-row.priority-baja .tabulator-cell { 
+    background-color: #fff9c4 !important; 
+}
+
+
+/* * (Documentación de Google: Resaltado de Edición v8.5)
+ * ¡MODIFICADO! Apuntando a 'div.tabulator-row'.
+*/
+#results-table div.tabulator-row.tabulator-editing .tabulator-cell {
+    background-color: #FFF9E5 !important;
+}
+
+/* * (Documentación de Google: Resaltado de Hover v8.5)
+ * ¡MODIFICADO! Apuntando a 'div.tabulator-row'.
+*/
+#results-table div.tabulator-row.priority-alta:hover .tabulator-cell,
+#results-table div.tabulator-row.priority-media:hover .tabulator-cell,
+#results-table div.tabulator-row.priority-baja:hover .tabulator-cell {
+    background-color: inherit !important; 
+    filter: brightness(98%);
 }

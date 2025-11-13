@@ -34,7 +34,9 @@
         <select id="select-columna">
             <option value="">{{ get_text(lang, 'column_select') }}</option>
         </select>
-        <input type="text" id="input-valor" placeholder="{{ get_text(lang, 'search_text') }}">
+        
+        <input type="text" id="input-valor" placeholder="{{ get_text(lang, 'search_text') }}" list="input-valor-list">
+        <datalist id="input-valor-list"></datalist>
         <button id="btn-add-filter">{{ get_text(lang, 'add_filter_button') }}</button>
         
         <h3>3. {{ get_text(lang, 'visible_columns_header') }}</h3>
@@ -108,6 +110,9 @@
                 <div id="active-filters-list" style="flex-grow: 1; display: flex; flex-wrap: wrap; gap: 0.5rem;">
                     </div>
                 
+                <button id="btn-bulk-edit" class="btn-azul-secundario" style="display: none;" title="Edita todas las filas seleccionadas a la vez">
+                    Editar Seleccionados
+                </button>
                 <button id="btn-add-row" class="btn-verde-secundario" style="display: none;" title="Añade una nueva fila en blanco al final (Hotkey: A)">
                     Añadir Fila
                 </button>
@@ -168,6 +173,61 @@
         </div>
 
     </main>
+    
+    <div id="modal-overlay" style="display: none;">
+        <div id="bulk-edit-modal">
+            <h3>Editar Filas Seleccionadas</h3>
+            <p id="bulk-edit-count">Vas a editar 0 filas.</p>
+            
+            <div class="modal-form-group">
+                <label for="bulk-edit-column">Columna a Editar</label>
+                <select id="bulk-edit-column">
+                    <option value="">Seleccione una columna...</option>
+                </select>
+            </div>
+            
+            <div class="modal-form-group">
+                <label for="bulk-edit-value">Nuevo Valor</label>
+                <input type="text" id="bulk-edit-value" list="bulk-edit-value-list">
+                <datalist id="bulk-edit-value-list"></datalist>
+            </div>
+            
+            <div class="modal-buttons">
+                <button id="btn-bulk-cancel" class="btn-rojo-secundario">Cancelar</button>
+                <button id="btn-bulk-apply" class="btn-verde-secundario">Aplicar Cambios</button>
+            </div>
+        </div>
+
+        <div id="manage-lists-modal" style="display: none;">
+                <h3>Administrar Autocompletado</h3>
+                
+                <div class="modal-form-group">
+                    <label for="manage-list-column">Selecciona la Lista a Editar</label>
+                    <select id="manage-list-column">
+                        <option value="">Seleccione una columna...</option>
+                    </select>
+                </div>
+
+                <div class="modal-form-group">
+                    <label>Valores Actuales (Solo lectura):</label>
+                    <div id="current-list-values" class="values-display-box">
+                        <em>Selecciona una columna para ver sus valores...</em>
+                    </div>
+                </div>
+                
+                <div class="modal-form-group">
+                    <label for="manage-list-input">Modificaciones</label>
+                    <span class="input-help-text">Escribe valores para <strong>AÑADIR</strong>. Para <strong>ELIMINAR</strong>, pon un guion (-) delante. Separa con comas.</span>
+                    <textarea id="manage-list-input" rows="3" placeholder="Ej: Nuevo Estado, -Estado Antiguo, Pendiente"></textarea>
+                </div>
+                
+                <div class="modal-buttons">
+                    <button id="btn-manage-cancel" class="btn-rojo-secundario">Cancelar</button>
+                    <button id="btn-manage-save" class="btn-verde-secundario">Guardar Lista</button>
+                </div>
+            </div>
+
+        </div>
 
     <script>
         // Inyecta los datos de la sesión (sin cambios)

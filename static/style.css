@@ -1,62 +1,78 @@
-/* ===================================================================
-   Archivo: static/style.css
-   Versión: 11.0 (Refactorización Moderna Completa)
-   Descripción: Un diseño limpio de dashboard con fondo gris claro
-                y tarjetas de contenido blancas.
-=================================================================== */
+/* =============================================================================
+   style.css
+   ---------
+   Hoja de estilos principal para "Mi Nuevo Buscador Web".
+   Diseño limpio tipo Dashboard con soporte para Tabulator, Modales y KPIs.
+   
+   Estructura:
+   1. Variables y Reset
+   2. Layout Principal (Sidebar y Contenido)
+   3. Componentes de UI (Botones, Inputs, Chips)
+   4. Componentes Específicos (Uploader, KPIs, Selector de Vistas)
+   5. Tabla de Datos (Tabulator Overrides)
+   6. Modales (Edición Masiva y Gestión de Listas)
+   7. Utilidades y Responsive
+   ============================================================================= */
 
-/* --- 1. Paleta de Colores y Variables Globales --- */
+/* --- 1. VARIABLES Y RESET --- */
 :root {
     /* Paleta Corporativa */
     --color-azul: #004A99;
-    --color-rojo: #E30613;
-    --color-rojo-hover: #C0000A;
-    --color-blanco: #FFFFFF;
+    --color-azul-claro: rgba(0, 74, 153, 0.1);
+    --color-azul-hover: rgba(0, 74, 153, 0.2);
     
-    /* Acento */
-    --color-amarillo: #FFC400;
+    --color-rojo: #E30613;
+    --color-rojo-claro: rgba(227, 6, 19, 0.1);
+    --color-rojo-hover: rgba(227, 6, 19, 0.2);
+    
+    --color-verde: #006400;
+    --color-verde-claro: rgba(0, 128, 0, 0.1);
+    --color-verde-hover: rgba(0, 128, 0, 0.2);
 
-    /* Neutros (¡REVISADO!) */
-    --color-fondo-app: #F4F7F9;       /* <-- Fondo "blanco oscuro" (gris claro) */
-    --color-fondo-sidebar: #FFFFFF; /* <-- Fondo blanco puro */
-    --color-fondo-tabla: #FFFFFF;     /* <-- Fondo blanco puro */
+    /* Neutros y Fondos */
+    --color-blanco: #FFFFFF;
+    --color-fondo-app: #F4F7F9;       /* Gris muy suave para el fondo general */
+    --color-fondo-sidebar: #FFFFFF;
+    --color-fondo-input: #F9FAFB;     /* Gris muy claro para inputs/headers */
     
     --color-texto-primario: #2E3A48;
     --color-texto-secundario: #6B7789;
-    --color-borde: #DEE2E6; /* Borde sutil */
+    
+    --color-borde: #DEE2E6;
     --color-borde-input: #CBD5E0;
 
-    /* UI */
+    /* Configuración UI */
     --font-principal: Arial, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    --sombra-ventana: 0 10px 30px rgba(0, 0, 0, 0.07);
-    --sombra-suave: 0 4px 12px rgba(0, 0, 0, 0.05);
     --radio-esquinas: 12px;
     --radio-inputs: 8px;
+    --sombra-ventana: 0 10px 30px rgba(0, 0, 0, 0.07);
+    --sombra-suave: 0 4px 12px rgba(0, 0, 0, 0.05);
 }
 
-/* --- 2. Estructura Principal y Layout --- */
 * { box-sizing: border-box; }
 
 body {
-     margin: 0;
+    margin: 0;
     font-family: var(--font-principal);
     color: var(--color-texto-primario);
     background-color: var(--color-fondo-app);
-    min-height: 100vh; /* Asegura que el fondo cubra al menos la pantalla */
+    min-height: 100vh;
 }
 
-/* --- 3. Barra Lateral (Sidebar) --- */
+/* --- 2. LAYOUT PRINCIPAL --- */
+
+/* Barra Lateral Fija */
 .sidebar {
-     width: 320px;
+    width: 320px;
     background-color: var(--color-fondo-sidebar);
     border-right: 1px solid var(--color-borde);
     padding: 1.5rem;
-    height: 100vh; /* Sigue ocupando toda la altura de la ventana */
-    overflow-y: auto; /* Sigue teniendo su propio scroll si es muy larga */
-    position: fixed; /* ¡LA CLAVE! Se fija a la ventana */
+    height: 100vh;
+    overflow-y: auto;
+    position: fixed;
     top: 0;
     left: 0;
-    z-index: 10; /* Se asegura de que esté por encima del contenido */
+    z-index: 10;
 }
 
 .sidebar h2 {
@@ -64,6 +80,7 @@ body {
     margin: 0 0 1.5rem 0;
     color: var(--color-azul);
 }
+
 .sidebar h3 {
     font-size: 1.1rem;
     color: var(--color-texto-primario);
@@ -74,149 +91,15 @@ body {
 }
 .sidebar h3:first-of-type { margin-top: 0; }
 
-/* Selector de Idioma */
-.lang-selector { display: flex; width: 100%; background-color: var(--color-fondo-app); border-radius: var(--radio-inputs); padding: 4px; margin-bottom: 1.5rem; }
-.lang-button { width: 50%; padding: 0.5rem; border: none; background-color: transparent; color: var(--color-texto-secundario); font-weight: 600; border-radius: 6px; cursor: pointer; }
-.lang-button.active { background-color: var(--color-blanco); color: var(--color-azul); box-shadow: var(--sombra-suave); }
-
-/* --- 4. Controles de la Barra Lateral --- */
-
-/* 4.1. Nuevo Uploader (Drag & Drop) */
-.file-uploader-container { width: 100%; margin-bottom: 1rem; }
-.drag-drop-area { border: 2px dashed var(--color-borde); border-radius: var(--radio-inputs); padding: 1.5rem; text-align: center; background-color: #F9FAFB; transition: background-color 0.2s ease; }
-.drag-drop-area:hover { background-color: #F0F4F8; border-color: var(--color-azul); }
-.drag-drop-label { cursor: pointer; display: block; }
-.drag-drop-area p { font-weight: 600; color: var(--color-texto-primario); margin: 0 0 0.25rem 0; font-size: 0.95rem; }
-.drag-drop-area span { font-size: 0.85rem; color: var(--color-texto-secundario); display: block; margin-bottom: 1rem; }
-.btn-browse { background-color: var(--color-blanco); color: var(--color-texto-primario); border: 1px solid var(--color-borde-input); border-radius: var(--radio-inputs); padding: 0.6rem 1rem; font-size: 0.9rem; font-weight: 600; display: inline-block; transition: all 0.2s ease; }
-.btn-browse:hover { background-color: #f8f9fa; border-color: #A0AEC0; }
-/* Lista de archivos subidos */
-#file-upload-list { margin-top: 1rem; }
-.file-list-item { display: flex; align-items: center; border: 1px solid var(--color-borde); border-radius: var(--radio-inputs); padding: 0.75rem; margin-bottom: 0.5rem; background-color: var(--color-blanco); }
-.file-list-item .file-icon { width: 24px; height: 24px; margin-right: 0.75rem; color: var(--color-azul); flex-shrink: 0; }
-.file-list-item .file-details { flex-grow: 1; min-width: 0; } /* min-width soluciona overflow */
-.file-list-item .file-name { display: block; font-weight: 600; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.file-list-item .file-size { display: block; font-size: 0.8rem; color: var(--color-texto-secundario); }
-
-/* 4.2. Controles de Filtro */
-.sidebar select,
-.sidebar input[type="text"] {
-    width: 100%;
-    padding: 0.75rem;
-    border: 1px solid var(--color-borde-input);
-    border-radius: var(--radio-inputs);
-    box-sizing: border-box;
-    margin-bottom: 1rem;
-    font-size: 0.95rem;
-    transition: all 0.2s ease;
-    background-color: var(--color-blanco);
-}
-.sidebar select:focus,
-.sidebar input[type="text"]:focus {
-    outline: none;
-    border-color: var(--color-azul);
-    box-shadow: 0 0 0 3px rgba(0, 74, 153, 0.2);
-}
-
-/* Botón Genérico (usado por Añadir Filtro) */
-button {
-    padding: 0.75rem;
-    border: none;
-    border-radius: var(--radio-inputs);
-    font-weight: 600;
-    font-size: 0.9rem;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    white-space: nowrap;
-}
-
-/* Botón "Añadir Filtro" (Blanco con borde) */
-#btn-add-filter {
-    width: 100%;
-    background-color: var(--color-blanco);
-    color: var(--color-texto-primario);
-    border: 1px solid var(--color-borde-input); /* <-- ¡CAMBIO! Borde sutil */
-    font-weight: 600;
-}
-#btn-add-filter:hover {
-    background-color: #f8f9fa;
-    border-color: #A0AEC0;
-}
-
-/* 4.3. Selector de Columnas Visibles */
-/* REEMPLAZA ESTA REGLA... */
-.column-toggle-buttons {
-    display: flex;
-    flex-direction: column; /* <-- ¡NUEVO! Apila los botones */
-    gap: 0.5rem;            /* <-- ¡NUEVO! Añade espacio entre ellos */
-    margin-bottom: 0.75rem;
-}
-
-
-.btn-small-link {
-    /* Estilo basado en el botón "Browse files" */
-    width: 100%; /* Ocupa todo el ancho */
-    background-color: var(--color-blanco);
-    color: var(--color-texto-primario);
-    border: 1px solid var(--color-borde-input);
-    border-radius: var(--radio-inputs);
-    padding: 0.6rem 1rem; /* Tamaño de botón pequeño/mediano */
-    font-size: 0.9rem;
-    font-weight: 600;
-    cursor: pointer;
-    text-align: center;
-    text-decoration: none; /* Quita el subrayado */
-    transition: all 0.2s ease;
-}
-
-
-.btn-small-link:hover {
-    background-color: #f8f9fa; /* Color de hover sutil */
-    border-color: #A0AEC0;
-    color: var(--color-texto-primario); /* Mantiene el color de texto */
-}
-
-#column-selector-wrapper {
-    max-height: 250px; /* Altura máxima antes de scroll */
-    overflow-y: auto;
-    border: 1px solid var(--color-borde);
-    border-radius: var(--radio-inputs);
-    padding: 1rem;
-    background-color: var(--color-fondo-app); /* Fondo gris claro */
-}
-
-.column-selector-item {
-    display: block; /* Uno por línea */
-    margin-bottom: 0.5rem;
-}
-
-.column-selector-item label {
-    display: flex;
-    align-items: center;
-    cursor: pointer;
-    font-size: 0.95rem;
-}
-
-.column-selector-item input[type="checkbox"] {
-    margin-right: 0.75rem;
-    /* Estilos modernos para checkbox */
-    width: 1.15em;
-    height: 1.15em;
-    border: 1px solid var(--color-borde-input);
-    border-radius: 3px;
-}
-
-/* --- 5. Contenido Principal (Main) --- */
+/* Área de Contenido Principal */
 .content {
-     padding: 2rem;
-    box-sizing: border-box;
-    margin-left: 320px; /* ¡LA CLAVE! Mueve el contenido 320px a la derecha */
+    padding: 2rem;
+    margin-left: 320px; /* Espacio para la sidebar */
+    transition: margin-left 0.3s ease;
 }
 
-/* 5.1. Encabezado Sutil */
 .content-header-sutil {
     margin-bottom: 1rem;
-    flex-shrink: 0; /* No se encoge */
 }
 
 .content-header-sutil h1 {
@@ -229,157 +112,241 @@ button {
     font-size: 1rem;
 }
 
-/* 5.2. Tarjeta de Contenido */
 .content-card {
-      background-color: var(--color-blanco); 
-    border-radius: var(--radio-esquinas);
-     border: 1px solid var(--color-borde);
-    box-shadow: var(--sombra-suave);
-     padding: 1.5rem;
-    margin-bottom: 1.5rem;
-    margin-top: 1.5rem; /* Añade un espacio después de los KPIs */
-}
-
-/* 5.3. Encabezado de la Tarjeta (Título + Iconos) */
-.card-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 1rem;
-    flex-shrink: 0;
-}
-.card-header h2 {
-    margin: 0;
-    font-size: 1.25rem;
-    color: var(--color-texto-primario);
-}
-
-.table-actions {
-    position: absolute; /* Se posiciona sobre el wrapper */
-    top: 10px;          /* Espacio desde arriba (dentro del borde) */
-    right: 10px;         /* Espacio desde la derecha */
-    z-index: 10;         /* Se asegura que esté sobre la tabla */
-    display: flex;
-    gap: 0.5rem;       /* Espacio entre los iconos */
-}
-.icon-button {
     background-color: var(--color-blanco);
-    color: var(--color-texto-secundario);
+    border-radius: var(--radio-esquinas);
+    border: 1px solid var(--color-borde);
+    box-shadow: var(--sombra-suave);
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    margin-top: 1.5rem;
+    display: flex; 
+    flex-direction: column;
+}
+
+/* --- 3. COMPONENTES DE UI --- */
+
+/* Inputs y Selects Generales */
+.sidebar select,
+.sidebar input[type="text"] {
+    width: 100%;
+    padding: 0.75rem;
     border: 1px solid var(--color-borde-input);
     border-radius: var(--radio-inputs);
-    width: 32px;  /* <-- Más pequeño (antes 40px) */
-    height: 32px; /* <-- Más pequeño (antes 40px) */
-    padding: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    transition: all 0.2s ease;
+    margin-bottom: 1rem;
+    font-size: 0.95rem;
+    background-color: var(--color-blanco);
+    transition: border-color 0.2s;
 }
 
-.icon-button svg {
-  width: 18px; /* <-- Más pequeño (antes 20px) */
-  height: 18px;
-}
-.icon-button:hover {
-    background-color: #f8f9fa;
-    color: var(--color-azul);
+.sidebar select:focus,
+.sidebar input[type="text"]:focus {
+    outline: none;
     border-color: var(--color-azul);
 }
 
-/* 5.4. Controles de Tabla (Filtros + Búsqueda) */
-.table-controls {
-    display: flex;
-    flex-wrap: wrap; /* Para que los chips se ajusten */
-    justify-content: space-between; /* Pone la búsqueda a la derecha */
-    align-items: center;
-    gap: 1rem;
-    margin-bottom: 1.5rem;
-    flex-shrink: 0;
-}
-
-/* Contenedor de chips */
-#active-filters-list {
-    flex-grow: 1; /* Ocupa el espacio */
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-}
-
-/* Botón Limpiar (rojo sutil) */
-.btn-rojo-secundario {
-    background-color: rgba(227, 6, 19, 0.1);
-    color: var(--color-rojo);
+/* Botones Base */
+button, .btn-small-link {
+    padding: 0.75rem;
     border: none;
     border-radius: var(--radio-inputs);
-    padding: 0.65rem 1rem;
     font-weight: 600;
     font-size: 0.9rem;
     cursor: pointer;
     transition: all 0.2s ease;
-    white-space: nowrap; /* Evita que se parta */
+    white-space: nowrap;
+    text-align: center;
+    text-decoration: none;
+    display: inline-block;
 }
 
-.btn-rojo-secundario:hover {
-    background-color: rgba(227, 6, 19, 0.2);
+/* Botones Específicos */
+#btn-add-filter, .btn-small-link {
+    width: 100%;
+    background-color: var(--color-blanco);
+    color: var(--color-texto-primario);
+    border: 1px solid var(--color-borde-input);
+}
+#btn-add-filter:hover, .btn-small-link:hover {
+    background-color: var(--color-fondo-input);
+    border-color: #A0AEC0;
 }
 
-/* Chip de Filtro Activo (rojo) */
+/* Botones de Acción (Verde/Azul/Rojo Sutiles) */
+.btn-verde-secundario {
+    background-color: var(--color-verde-claro);
+    color: var(--color-verde);
+    padding: 0.65rem 1rem;
+}
+.btn-verde-secundario:hover { background-color: var(--color-verde-hover); }
+
+.btn-azul-secundario {
+    background-color: var(--color-azul-claro);
+    color: var(--color-azul);
+    padding: 0.65rem 1rem;
+}
+.btn-azul-secundario:hover { background-color: var(--color-azul-hover); }
+
+.btn-rojo-secundario {
+    background-color: var(--color-rojo-claro);
+    color: var(--color-rojo);
+    padding: 0.65rem 1rem;
+}
+.btn-rojo-secundario:hover { background-color: var(--color-rojo-hover); }
+
+/* Botones Icono (Tabla) */
+.icon-button {
+    background-color: var(--color-blanco);
+    color: var(--color-texto-secundario);
+    border: 1px solid var(--color-borde-input);
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.icon-button svg { width: 18px; height: 18px; }
+.icon-button:hover {
+    background-color: var(--color-fondo-input);
+    color: var(--color-azul);
+    border-color: var(--color-azul);
+}
+
+/* Chips de Filtros */
 .filtro-chip {
     display: inline-flex;
     align-items: center;
-    background-color: rgba(227, 6, 19, 0.1);
+    background-color: var(--color-rojo-claro);
     color: var(--color-rojo);
-    border-radius: 16px; /* Píldora */
+    border-radius: 16px;
     padding: 0.35rem 0.5rem 0.35rem 0.75rem;
     font-size: 0.9rem;
 }
-
-.filtro-chip strong { margin-left: 0.25rem; }
 .filtro-chip .remove-filter-btn {
     background: none;
     border: none;
     color: var(--color-rojo);
     margin-left: 0.35rem;
     font-size: 1.3rem;
-    font-weight: 600;
     padding: 0;
-    cursor: pointer;
-    line-height: 1;
     opacity: 0.7;
 }
-
 .filtro-chip .remove-filter-btn:hover { opacity: 1; }
 
-/* Lupa de Búsqueda */
-.search-wrapper { position: relative; flex-shrink: 0; }
-.search-wrapper .search-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); width: 20px; height: 20px; color: var(--color-texto-secundario); }
-#input-search-table {
-    padding: 0.75rem 0.75rem 0.75rem 2.75rem;
-    border: 1px solid var(--color-borde-input);
+/* --- 4. COMPONENTES ESPECÍFICOS --- */
+
+/* Selector de Idioma */
+.lang-selector {
+    display: flex;
+    width: 100%;
+    background-color: var(--color-fondo-app);
     border-radius: var(--radio-inputs);
+    padding: 4px;
+    margin-bottom: 1.5rem;
+}
+.lang-button {
+    width: 50%;
+    padding: 0.5rem;
+    border: none;
+    background-color: transparent;
+    color: var(--color-texto-secundario);
+    border-radius: 6px;
+}
+.lang-button.active {
+    background-color: var(--color-blanco);
+    color: var(--color-azul);
+    box-shadow: var(--sombra-suave);
+}
+
+/* Uploader Drag & Drop */
+.drag-drop-area {
+    border: 2px dashed var(--color-borde);
+    border-radius: var(--radio-inputs);
+    padding: 1.5rem;
+    text-align: center;
+    background-color: var(--color-fondo-input);
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+.drag-drop-area:hover, .drag-drop-area.dragging {
+    background-color: #EBF5FF;
+    border-color: var(--color-azul);
+}
+.drag-drop-area p {
+    font-weight: 600;
+    margin: 0 0 0.25rem 0;
     font-size: 0.95rem;
-    width: 300px;
+}
+.drag-drop-area span {
+    font-size: 0.85rem;
+    color: var(--color-texto-secundario);
+    display: block;
+    margin-bottom: 1rem;
+}
+
+/* Lista de Archivos Subidos */
+.file-list-item {
+    display: flex;
+    align-items: center;
+    border: 1px solid var(--color-borde);
+    border-radius: var(--radio-inputs);
+    padding: 0.75rem;
+    margin-top: 1rem;
     background-color: var(--color-blanco);
 }
-#input-search-table:focus { outline: none; border-color: var(--color-azul); box-shadow: 0 0 0 3px rgba(0, 74, 153, 0.2); }
-
-
-/* --- 5.5. TARJETA DE RESUMEN (¡NUEVO!) --- */
-.resumen-busqueda {
-    display: grid;
-    /* Crea 3 columnas de igual tamaño */
-    grid-template-columns: repeat(3, 1fr); 
-    gap: 1.5rem; /* Espacio entre las mini-tarjetas */
+.file-list-item .file-icon {
+    width: 24px;
+    height: 24px;
+    margin-right: 0.75rem;
+    color: var(--color-azul);
+}
+.file-list-item .file-name {
+    display: block;
+    font-weight: 600;
+    font-size: 0.9rem;
 }
 
+/* Selector de Columnas (Sidebar) */
+#column-selector-wrapper {
+    max-height: 250px;
+    overflow-y: auto;
+    border: 1px solid var(--color-borde);
+    border-radius: var(--radio-inputs);
+    padding: 1rem;
+    background-color: var(--color-fondo-app);
+}
+.column-toggle-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+}
+.column-selector-item { margin-bottom: 0.5rem; }
+.column-selector-item label {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    font-size: 0.95rem;
+}
+.column-selector-item input {
+    margin-right: 0.75rem;
+    width: 1.15em;
+    height: 1.15em;
+}
+
+/* Tarjetas de KPIs */
+.resumen-busqueda {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.5rem;
+}
 .resumen-card-item {
     border: 1px solid var(--color-borde);
     border-radius: var(--radio-inputs);
     padding: 1.25rem;
-    background-color: var(--color-fondo-app); /* Fondo gris claro */
+    background-color: var(--color-fondo-app);
 }
-
 .resumen-card-item .card-titulo {
     display: block;
     font-size: 0.9rem;
@@ -387,439 +354,245 @@ button {
     color: var(--color-texto-secundario);
     margin-bottom: 0.5rem;
 }
-
 .resumen-card-item .card-valor {
     display: block;
     font-size: 1.75rem;
     font-weight: 600;
-    color: var(--color-texto-primario);
 }
 
-/* Para pantallas más pequeñas, apila las tarjetas */
-@media (max-width: 900px) {
-    .resumen-busqueda {
-        grid-template-columns: 1fr; /* Una sola columna */
-    }
+/* Selector de Vistas (Detallada/Agrupada) */
+.view-selector-container {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+    margin-top: 1.5rem;
+    margin-bottom: -0.5rem;
+    padding-left: 0.5rem;
 }
-/* --- FIN DE TARJETA DE RESUMEN --- */
+.view-selector-buttons {
+    display: flex;
+    background-color: var(--color-fondo-app);
+    border-radius: var(--radio-inputs);
+    padding: 4px;
+    border: 1px solid var(--color-borde);
+}
+.view-button {
+    padding: 0.5rem 1rem;
+    border: none;
+    background-color: transparent;
+    color: var(--color-texto-secundario);
+    border-radius: 6px;
+}
+.view-button.active {
+    background-color: var(--color-blanco);
+    color: var(--color-azul);
+    box-shadow: var(--sombra-suave);
+}
+.group-by-wrapper select {
+    padding: 0.75rem;
+    border: 1px solid var(--color-borde-input);
+    border-radius: var(--radio-inputs);
+    min-width: 250px;
+}
 
+/* Controles de la Tabla (Search, Actions) */
+.table-controls {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+.search-wrapper { position: relative; }
+.search-wrapper .search-icon {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 20px;
+    height: 20px;
+    color: var(--color-texto-secundario);
+}
+#input-search-table {
+    padding: 0.75rem 0.75rem 0.75rem 2.75rem;
+    border: 1px solid var(--color-borde-input);
+    border-radius: var(--radio-inputs);
+    font-size: 0.95rem;
+    width: 300px;
+}
+.table-actions {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 10;
+    display: flex;
+    gap: 0.5rem;
+}
 
-/* --- 6. La Tabla (¡SOLUCIÓN SCROLL!) --- */
+/* --- 5. TABLA DE DATOS (TABULATOR) --- */
 
-/* (Documentación de Google)
-Propósito: Define la altura base de los contenedores de la tabla.
-Esta regla REEMPLAZA la propiedad 'height: "65vh"' que eliminamos
-del constructor de Tabulator en 'script.js' (v7.31).
-Ahora, el CSS controla la altura en la vista de ventana, y las
-reglas de '.in-fullscreen' (que ya deberías tener)
-controlarán la altura en pantalla completa.
-*/
 .table-container-flotante {
     position: relative;
     flex-grow: 1;
     min-height: 0;
-    
-    /* ¡ESTA ES LA LÍNEA NUEVA (o que debes verificar)! */
-    height: 65vh; 
+    height: 65vh; /* Altura base */
 }
 
-/* * ¡NUEVO! Estilos para Tabulator
- * Esto asegura que la tabla se integre con tu diseño.
- */
 #results-table {
-    /* * Hereda el 'border' y 'radius' de tu diseño original.
-     * Usamos 'tabulator_modern.min.css', que ya tiene bordes, 
-     * pero podemos forzarlos si es necesario.
-     */
     border: 1px solid var(--color-borde);
     border-radius: var(--radio-esquinas);
     box-shadow: var(--sombra-ventana);
     background-color: var(--color-blanco);
 }
 
-/* * Mensaje "Cargue un archivo..." 
- * Ahora se lo pasamos a Tabulator como 'placeholder'.
- */
+/* Colores de Prioridad (Aplicados a la fila completa) */
+#results-table div.tabulator-row.priority-alta .tabulator-cell { background-color: #ffcdd2 !important; }
+#results-table div.tabulator-row.priority-media .tabulator-cell { background-color: #ffe0b2 !important; }
+#results-table div.tabulator-row.priority-baja .tabulator-cell { background-color: #fff9c4 !important; }
 
-/* 6.2. Estilos de Tabla (Moderna, gris) */
-/* * NOTA: La mayoría de los estilos de 'table', 'th', 'td' 
- * ya no son necesarios, ya que Tabulator los gestiona.
- * Los dejamos por si la vista 'agrupada' (que usa HTML)
- * todavía los necesita.
- */
+/* Resaltado de Edición */
+#results-table div.tabulator-row.tabulator-editing .tabulator-cell { background-color: #FFF9E5 !important; }
 
- table {
-    border-collapse: collapse;
-    border-spacing: 0;
-}
-
-th, td {
-    padding: 0.85rem 1rem;
-    text-align: left;
-    white-space: nowrap; /* <-- Clave para scroll lateral */
-    border-bottom: 1px solid var(--color-borde);
-}
-
-/* Encabezados TH (Estilo gris) */
-th {
-    background-color: #F9FAFB; /* Gris muy claro */
-    color: var(--color-texto-secundario);
-    font-weight: 600;
-    font-size: 0.8rem;
-    text-transform: uppercase;
-    border-bottom-width: 2px; /* Línea inferior más gruesa */
-    position: sticky; /* Encabezados fijos */
-    top: 0;
-    z-index: 2; /* Encima de las celdas sticky de la izquierda */
-    cursor: pointer;
-    user-select: none;
-    transition: background-color 0.2s ease;
-}
-th:hover {
-    background-color: #F0F4F8;
-}
-
-/* Iconos de Ordenamiento (para ▲ y ▼) */
-th .sort-icon {
-    display: inline-block;
-    width: 1em;
-    margin-left: 0.5em;
-    opacity: 0.3;
-    transition: all 0.2s ease;
-}
-th.sorted-asc .sort-icon.asc,
-th.sorted-desc .sort-icon.desc {
-    opacity: 1;
-    color: var(--color-azul);
-}
-/* Oculta el icono que no está activo */
-th:not(.sorted-asc) .sort-icon.asc { display: none; }
-th:not(.sorted-desc) .sort-icon.desc { display: none; }
-/* Muestra ambos si no está ordenado (para simplicidad) */
-th:not(.sorted-asc):not(.sorted-desc) .sort-icon { display: inline-block; }
-
-
-/* ¡NUEVO! Celda de Número de Fila */
-th.cell-row-number,
-td.cell-row-number {
-    background-color: #F9FAFB; /* Fondo gris claro */
-    text-align: right;
-    color: var(--color-texto-secundario);
-    font-size: 0.85rem;
-    position: sticky; /* Fijo a la izquierda */
-    left: 0;
-    z-index: 1; /* Por debajo del header */
-    border-right: 1px solid var(--color-borde);
-    /* Sombra sutil para indicar que está fijo */
-    box-shadow: 2px 0 5px rgba(0,0,0,0.03); 
-}
-/* Asegura que el TH de # esté sobre el TD de # */
-th.cell-row-number {
-    z-index: 3; /* Encima de todo */
-}
-
-/* Celdas TD (Limpias) */
-td {
-    font-size: 0.95rem;
-    color: var(--color-texto-primario);
-}
-tbody tr:hover {
-    background-color: #F9FAFB; /* Hover sutil */
-}
-/* La celda de número de fila no debe cambiar de color en hover */
-tbody tr:hover td.cell-row-number {
-    background-color: #F9FAFB;
-}
-
-tbody tr:last-child td {
-    border-bottom: none;
-}
-
-/* --- 7. Modo Pantalla Completa --- */
-body.fullscreen-mode .sidebar {
-    margin-left: -320px;
-}
-
-/* 1. Expande el .content para que ocupe el espacio de la barra */
-body.fullscreen-mode .content {
-    margin-left: 0;
-    padding: 0; /* Opcional: quita el padding de la página */
-}
-
-/* 2. Oculta todo lo que NO es la tabla */
-body.fullscreen-mode .content-header-sutil,
-body.fullscreen-mode .resumen-busqueda,
-body.fullscreen-mode .content-card .card-header,
-body.fullscreen-mode .content-card .table-controls {
-    display: none;
-}
-
-/* 3. Expande la tarjeta de la tabla para que sea la página completa */
-body.fullscreen-mode .content-card {
-    margin: 0;
-    padding: 0;
-    border: none;
-    border-radius: 0;
-    box-shadow: none;
-    height: 100vh; 
-    display: flex;            
-    flex-direction: column; 
-    width: 100%;             /* <-- AÑADIDO (Asegura el ancho) */
-    overflow: hidden;        /* <-- Corta el desbordamiento) */
-}
-
-
-/* 5. Expande el wrapper de la tabla */
-body.fullscreen-mode .content-card > div[style="position: relative;"] {
-    flex-grow: 1;  
-    min-height: 0; 
-}
-
-
-body.fullscreen-mode .icon-button[title="Pantalla Completa"] svg {
-    /* Cambia al icono de "salir de pantalla completa" */
-    transform: scale(0.8);
-}
-
-/* 4. Expande la tabla para que llene la tarjeta */
-body.fullscreen-mode .table-container-flotante {
-    height: 100%; 
-    border: none;
-    border-radius: 0;
-    overflow: auto; /* <-- ¡LA OTRA CLAVE QUE FALTABA! (Muestra scrolls) */
-}
-
-/* 5. Asegura que los iconos sigan viéndose bien */
-body.fullscreen-mode .table-actions {
-    top: 15px;
-    right: 15px;
-}
-
-/* --- 8. ESTADO DRAGGING (¡NUEVO!) --- */
-/* Esto da el feedback visual azul cuando arrastras un archivo */
-
-.drag-drop-area.dragging {
-    background-color: #EBF5FF; /* Un azul muy claro */
-    border-color: var(--color-azul);
-}
-
-/* --- 8. ESTILOS DE VISTA AGRUPADA (¡NUEVO!) --- */
-
-/* Contenedor para los botones Detallada / Agrupada */
-.view-selector-container {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    margin-top: 1.5rem; /* Separación de los KPIs */
-    margin-bottom: -0.5rem; /* Pega los botones a la tarjeta de abajo */
-    padding-left: 0.5rem;
-}
-
-.view-selector-label {
-    font-size: 0.9rem;
-    font-weight: 600;
-    color: var(--color-texto-secundario);
-}
-
-.view-selector-buttons {
-    display: flex;
-    background-color: var(--color-fondo-app);
-    border-radius: var(--radio-inputs);
-    padding: 4px;
-    border: 1px solid var(--color-borde);
-}
-
-.view-button {
-    padding: 0.5rem 1rem;
-    border: none;
-    background-color: transparent;
-    color: var(--color-texto-secundario);
-    font-weight: 600;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 0.9rem;
-}
-
-/* Estilo del botón activo, similar al selector de idioma */
-.view-button.active {
-    background-color: var(--color-blanco);
-    color: var(--color-azul);
-    box-shadow: var(--sombra-suave);
-}
-
-/* Wrapper para el dropdown 'Agrupar por' */
-.group-by-wrapper {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-}
-
-.group-by-wrapper label {
-    font-size: 1rem;
-    font-weight: 600;
-    color: var(--color-texto-primario);
-}
-
-.group-by-wrapper select {
-    padding: 0.75rem;
-    border: 1px solid var(--color-borde-input);
-    border-radius: var(--radio-inputs);
-    font-size: 0.95rem;
-    background-color: var(--color-blanco);
-    min-width: 250px;
-}
-
-/* --- 8. ESTILOS DE VISTA AGRUPADA (Revisado) --- */
-
-/* Contenedor para los botones Y el dropdown */
-.view-selector-container {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap; /* Permite que el dropdown se ponga abajo si no hay espacio */
-    gap: 1.5rem; /* Espacio entre los botones y el dropdown */
-    margin-top: 1.5rem;
-    margin-bottom: -0.5rem;
-    padding-left: 0.5rem;
-}
-
-/* Contenedor solo para los botones */
-.view-selector-sub-container {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-}
-
-.view-selector-label {
-    font-size: 0.9rem;
-    font-weight: 600;
-    color: var(--color-texto-secundario);
-}
-
-.view-selector-buttons {
-    display: flex;
-    background-color: var(--color-fondo-app);
-    border-radius: var(--radio-inputs);
-    padding: 4px;
-    border: 1px solid var(--color-borde);
-}
-
-.view-button {
-    padding: 0.5rem 1rem;
-    border: none;
-    background-color: transparent;
-    color: var(--color-texto-secundario);
-    font-weight: 600;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 0.9rem;
-}
-
-.view-button.active {
-    background-color: var(--color-blanco);
-    color: var(--color-azul);
-    box-shadow: var(--sombra-suave);
-}
-
-/* Wrapper para el dropdown 'Agrupar por' (igual que antes) */
-.group-by-wrapper {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-}
-
-.group-by-wrapper label {
-    font-size: 1rem;
-    font-weight: 600;
-    color: var(--color-texto-primario);
-}
-
-.group-by-wrapper select {
-    padding: 0.75rem;
-    border: 1px solid var(--color-borde-input);
-    border-radius: var(--radio-inputs);
-    font-size: 0.95rem;
-    background-color: var(--color-blanco);
-    min-width: 250px;
-}
-
-
-/* --- 9. ¡NUEVO! Estilos para Botones de Edición (Tu Punto 2) --- */
-
-/* Botón "Consolidar" (Verde) */
-.btn-verde-secundario {
-    background-color: rgba(0, 128, 0, 0.1); /* Verde claro */
-    color: #006400; /* Verde oscuro */
-    border: none;
-    border-radius: var(--radio-inputs);
-    padding: 0.65rem 1rem;
-    font-weight: 600;
-    font-size: 0.9rem;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    white-space: nowrap; 
-}
-
-.btn-verde-secundario:hover {
-    background-color: rgba(0, 128, 0, 0.2);
-}
-
-/* (Botón 'btn-peligro' eliminado ya que se quitó el botón) */
-
-/* --- 10. ¡NUEVO! Estilo para Icono de Eliminar Fila --- */
-
-/* Estilo para el icono de papelera en la tabla */
-.delete-icon {
-    color: #A0AEC0; /* Un gris sutil por defecto */
-    cursor: pointer;
-    transition: color 0.2s ease;
-}
-
-/* Al pasar el mouse sobre la *celda*, cambia el color del icono a rojo */
-.tabulator-cell:hover .delete-icon {
-    color: var(--color-rojo); /* Rojo al hacer hover */
-}
-
-
-/* ==============================================================
-   ¡SOLUCIÓN v8.5! Estilos de Prioridad de Fila (¡EL BUENO!)
-=================================================================
-*/
-
-/* * (Documentación de Google: Reglas de Prioridad v8.5)
- * ¡MODIFICADO! Apuntando a 'div.tabulator-row' en lugar de 'tr'.
- * Este es el selector correcto para Tabulator v5.x
- * Se mantiene el '#results-table' para alta especificidad.
-*/
-
-/* Prioridad ALTA: Rojo más notable */
-#results-table div.tabulator-row.priority-alta .tabulator-cell { 
-    background-color: #ffcdd2 !important; 
-}
-
-/* Prioridad MEDIA: Naranja más notable */
-#results-table div.tabulator-row.priority-media .tabulator-cell { 
-    background-color: #ffe0b2 !important; 
-}
-
-/* Prioridad BAJA: Amarillo más notable */
-#results-table div.tabulator-row.priority-baja .tabulator-cell { 
-    background-color: #fff9c4 !important; 
-}
-
-
-/* * (Documentación de Google: Resaltado de Edición v8.5)
- * ¡MODIFICADO! Apuntando a 'div.tabulator-row'.
-*/
-#results-table div.tabulator-row.tabulator-editing .tabulator-cell {
-    background-color: #FFF9E5 !important;
-}
-
-/* * (Documentación de Google: Resaltado de Hover v8.5)
- * ¡MODIFICADO! Apuntando a 'div.tabulator-row'.
-*/
+/* Hover sobre filas de prioridad (oscurecer ligeramente) */
 #results-table div.tabulator-row.priority-alta:hover .tabulator-cell,
 #results-table div.tabulator-row.priority-media:hover .tabulator-cell,
 #results-table div.tabulator-row.priority-baja:hover .tabulator-cell {
     background-color: inherit !important; 
     filter: brightness(98%);
+}
+
+/* Icono de Eliminar en celda */
+.delete-icon {
+    color: #A0AEC0;
+    cursor: pointer;
+    transition: color 0.2s;
+}
+.tabulator-cell:hover .delete-icon { color: var(--color-rojo); }
+
+/* Celda Sticky para N° Fila */
+.tabulator-cell[tabulator-field="_row_id"] {
+    background-color: var(--color-fondo-input);
+    font-weight: bold;
+    color: var(--color-texto-secundario);
+    border-right: 1px solid var(--color-borde);
+}
+
+/* --- 6. MODALES (EDICIÓN Y LISTAS) --- */
+
+#modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    backdrop-filter: blur(2px);
+}
+
+#bulk-edit-modal,
+#manage-lists-modal {
+    background-color: var(--color-blanco);
+    padding: 2rem;
+    border-radius: var(--radio-esquinas);
+    box-shadow: var(--sombra-ventana);
+    width: 450px;
+    max-width: 90%;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    border: 1px solid var(--color-borde);
+}
+
+#bulk-edit-modal h3,
+#manage-lists-modal h3 {
+    margin-top: 0;
+    color: var(--color-azul);
+    font-size: 1.25rem;
+    border-bottom: 1px solid var(--color-borde);
+    padding-bottom: 0.5rem;
+}
+
+.modal-form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.modal-form-group label {
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: var(--color-texto-primario);
+}
+
+.modal-form-group select,
+.modal-form-group input,
+.modal-form-group textarea {
+    padding: 0.75rem;
+    border: 1px solid var(--color-borde-input);
+    border-radius: var(--radio-inputs);
+    width: 100%;
+    font-family: var(--font-principal);
+}
+
+.modal-form-group textarea:focus,
+.modal-form-group input:focus,
+.modal-form-group select:focus {
+    outline: none;
+    border-color: var(--color-azul);
+}
+
+.input-help-text {
+    font-size: 0.8rem;
+    color: var(--color-texto-secundario);
+}
+
+/* Caja de visualización de valores (Manage Lists) */
+.values-display-box {
+    background-color: var(--color-fondo-input);
+    border: 1px solid var(--color-borde);
+    border-radius: var(--radio-inputs);
+    padding: 0.75rem;
+    font-size: 0.85rem;
+    color: var(--color-texto-secundario);
+    max-height: 100px;
+    overflow-y: auto;
+    line-height: 1.5;
+}
+
+.modal-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+/* --- 7. UTILIDADES Y RESPONSIVE --- */
+
+/* Modo Pantalla Completa */
+body.fullscreen-mode .sidebar { margin-left: -320px; }
+body.fullscreen-mode .content { margin-left: 0; padding: 0; }
+body.fullscreen-mode .content-header-sutil,
+body.fullscreen-mode .resumen-busqueda,
+body.fullscreen-mode .content-card .card-header,
+body.fullscreen-mode .content-card .table-controls { display: none; }
+
+body.fullscreen-mode .content-card {
+    margin: 0;
+    border: none;
+    border-radius: 0;
+    height: 100vh;
+    width: 100%;
+}
+body.fullscreen-mode .table-container-flotante { height: 100%; }
+body.fullscreen-mode .table-actions { top: 15px; right: 15px; }
+
+/* Adaptación Móvil */
+@media (max-width: 900px) {
+    .resumen-busqueda { grid-template-columns: 1fr; }
 }

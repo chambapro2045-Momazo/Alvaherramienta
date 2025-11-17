@@ -1,0 +1,15 @@
+{
+    "rules": [
+        {
+            "column": "Assignee",
+            "value": "alvaro.moncada@grupobimbo.com",
+            "priority": "Alta",
+            "reason": "Proveedores importantes asignados",
+            "active": true
+        }
+    ],
+    "settings": {
+        "enable_scf_intercompany": true,
+        "enable_age_sort": true
+    }
+}

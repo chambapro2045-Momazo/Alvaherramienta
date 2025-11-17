@@ -1,35 +1,31 @@
 """
-loader.py (Versión 8.0 - Prioridades)
+loader.py
+---------
 
 Módulo encargado de la carga y validación de datos.
 
-¡NUEVO! Ahora detecta la columna "Pay group", asigna
-una prioridad a cada fila ("Alta", "Media", "Baja")
-y la guarda en una nueva columna interna `_priority`.
+v16.0:
+- Se integra 'priority_manager' para aplicar reglas personalizadas
+  después de la carga inicial.
+- Se inicializa la columna '_priority_reason' para el tooltip.
 """
 
 import pandas as pd
 import numpy as np
-
-# (ELIMINADO v7.9) La función _find_monto_column se devolvió a app.py
-
-# --- (NUEVO v8.0) Funciones de Lógica de Prioridad ---
+# (NUEVO v16.0) Importa el módulo de reglas personalizadas
+from .priority_manager import apply_priority_rules
+# (NUEVO) Importar load_settings
+from .priority_manager import apply_priority_rules, load_settings
 
 def _find_pay_group_column(df: pd.DataFrame) -> str | None:
-    """
-    (Documentación de Google: Inicio de la función)
-    Propósito:
-    Intenta encontrar la columna de "Pay group" en el DataFrame.
-    
+    """Intenta encontrar la columna de "Pay group" en el DataFrame.
+
     Args:
         df (pd.DataFrame): El DataFrame en el que buscar.
 
     Returns:
-        str | None: El nombre de la columna encontrada (ej. "Pay group")
-                    o None si no se encuentra.
-    (Documentación de Google: Fin de la función)
+        str | None: El nombre de la columna encontrada o None.
     """
-    # (Documentación de Google: Lista de posibles nombres (en minúsculas))
     possible_names = ['pay group', 'grupo de pago', 'paygroup']
     for col in df.columns:
         if str(col).lower() in possible_names:
@@ -38,33 +34,29 @@ def _find_pay_group_column(df: pd.DataFrame) -> str | None:
 
 def _assign_priority(pay_group_value: str) -> str:
     """
-    (Documentación de Google: Inicio de la función)
-    Propósito:
     Asigna una prioridad ("Alta", "Media", "Baja") basado
-    en el valor de la celda de "Pay group".
+    en el valor de la celda de "Pay group" (Lógica Base).
 
     Args:
         pay_group_value (str): El valor de la celda (ej. "SCF" o "Pay Group 2").
 
     Returns:
         str: "Alta", "Media", o "Baja".
-    (Documentación de Google: Fin de la función)
     """
     if pay_group_value is None:
-        return 'Media' # (Documentación de Google: Valor por defecto)
+        return 'Media' # Valor por defecto
 
     val = str(pay_group_value).strip().upper()
 
-    # (Documentación de Google: 1. Prioridad ALTA)
+    # 1. Prioridad ALTA
     if val == 'SCF' or val == 'INTERCOMPANY':
         return 'Alta'
     
-    # (Documentación de Google: 2. Prioridad BAJA)
+    # 2. Prioridad BAJA
     if val.startswith('PAY GROUP'):
         return 'Baja'
     
-    # (Documentación de Google: 3. Prioridad MEDIA -
-    #     incluye DIST, GNTD, PAYROLL, RENTS, etc.)
+    # 3. Prioridad MEDIA (Resto)
     return 'Media'
 
 # --- Fin de Funciones de Prioridad ---
@@ -72,10 +64,8 @@ def _assign_priority(pay_group_value: str) -> str:
 
 def cargar_datos(ruta_archivo: str) -> tuple[pd.DataFrame, str | None]:
     """
-    (Documentación de Google: Inicio de la función)
-    Propósito:
-    Carga un archivo Excel, limpia encabezados, rellena nulos
-    y crea las columnas internas `_row_status` y `_priority`.
+    Carga un archivo Excel, limpia encabezados, rellena nulos,
+    calcula estatus y aplica reglas de prioridad (Estáticas + Dinámicas).
 
     Args:
         ruta_archivo (str): Ruta completa del archivo Excel.
@@ -84,21 +74,15 @@ def cargar_datos(ruta_archivo: str) -> tuple[pd.DataFrame, str | None]:
         tuple[pd.DataFrame, str | None]: 
             - El DataFrame con los datos cargados y pre-procesados.
             - El nombre de la columna "Pay Group" encontrada (o None).
-    (Documentación de Google: Fin de la función)
     """
     try:
-        # (Documentación de Google: Carga el archivo, forzando todo a string)
+        # 1. Cargar y limpiar datos base
         df = pd.read_excel(ruta_archivo, dtype=str)
-
-        # (Documentación de Google: Limpia espacios en blanco de los nombres de columnas)
         df.columns = [col.strip() for col in df.columns]
-
-        # (Documentación de Google: Reemplaza valores nulos (NaN, NaT) por cadenas vacías)
         df = df.fillna("")
-
         print(f" Archivo cargado correctamente con {len(df)} registros.")
 
-        # --- INICIO: LÓGICA DE "ROW STATUS" (Sin cambios v7.9) ---
+        # 2. Lógica de "Row Status" (Completo/Incompleto)
         blank_mask = (df == "") | (df == "0")
         incomplete_rows = blank_mask.any(axis=1)
         df['_row_status'] = np.where(
@@ -106,28 +90,51 @@ def cargar_datos(ruta_archivo: str) -> tuple[pd.DataFrame, str | None]:
             "Incompleto",
             "Completo"
         )
-        # --- FIN DEL BLOQUE ---
-
-        # --- ¡INICIO: LÓGICA DE "PRIORITY" (NUEVO v8.0)! ---
         
-        # (Documentación de Google: 1. Busca la columna "Pay Group")
+        # --- INICIO LÓGICA DE PRIORIDAD v16.0 ---
+        
+        # 3. (NUEVO) Inicializar la columna de razón para el tooltip.
+        df['_priority_reason'] = "" 
+
+    # 3. Cargar Configuraciones del Usuario
+        user_settings = load_settings()
+        enable_scf = user_settings.get('enable_scf_intercompany', True) # Default True
+        
+        # 4. Aplicar Prioridad Base (hardcoded por 'Pay group')
         pay_group_col_name = _find_pay_group_column(df)
         
         if pay_group_col_name:
             print(f"Columna de 'Pay Group' identificada: '{pay_group_col_name}'")
-            # (Documentación de Google: 2. Aplica la lógica de prioridad
-            #     a cada fila usando el valor de esa columna)
+            # Asigna la prioridad base
             df['_priority'] = df[pay_group_col_name].apply(_assign_priority)
-        else:
-            # (Documentación de Google: 3. Si no se encuentra, asigna
-            #     "Media" a todas las filas)
-            print("Advertencia: No se encontró columna de 'Pay Group'. Asignando prioridad 'Media' por defecto.")
-            df['_priority'] = 'Media'
-            
-        # --- FIN DE LÓGICA DE PRIORIDAD ---
 
-        # (Documentación de Google: Devuelve el DF y el nombre
-        #  de la columna encontrada)
+                # (NUEVO) Solo aplicar lógica hardcoded si el usuario quiere
+            if enable_scf:
+                df['_priority'] = df[pay_group_col_name].apply(_assign_priority)
+                df.loc[df['_priority'] == 'Alta', '_priority_reason'] = "Prioridad base (SCF/Intercompany)"
+                df.loc[df['_priority'] == 'Media', '_priority_reason'] = "Prioridad base (Estándar)"
+                df.loc[df['_priority'] == 'Baja', '_priority_reason'] = "Prioridad base (Pay Group)"
+            else:
+                # Si está desactivado, todo nace como Media
+                df['_priority'] = 'Media'
+                df['_priority_reason'] = "Prioridad base (Estándar)"
+            
+            # (NUEVO) Asigna una razón por defecto para la lógica base
+            df.loc[df['_priority'] == 'Alta', '_priority_reason'] = "Prioridad base (SCF/Intercompany)"
+            df.loc[df['_priority'] == 'Media', '_priority_reason'] = "Prioridad base (Estándar)"
+            df.loc[df['_priority'] == 'Baja', '_priority_reason'] = "Prioridad base (Pay Group)"
+        else:
+            print("Advertencia: No se encontró 'Pay Group'. Asignando 'Media' por defecto.")
+            df['_priority'] = 'Media'
+            df['_priority_reason'] = "Prioridad base (Estándar)"
+        
+        # 5. (NUEVO) Aplicar Reglas Personalizadas del Usuario
+        # (Esto sobrescribirá la prioridad y la razón donde haya coincidencias)
+        print("Aplicando reglas de prioridad personalizadas...")
+        df = apply_priority_rules(df)
+        
+        # --- FIN LÓGICA DE PRIORIDAD ---
+
         return df, pay_group_col_name
 
     except FileNotFoundError:

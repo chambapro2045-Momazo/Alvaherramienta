@@ -1,22 +1,19 @@
 /**
- * script.js (Versión 15.3 - Modales Completos)
- *
- * Cambios realizados en esta versión:
- * 1. SECCIÓN 6: Se reemplazó la función 'handleManageLists' (basada en prompt)
- * por un conjunto de funciones para manejar el nuevo Modal de Listas:
- * - openManageListsModal: Abre el modal y carga el dropdown de columnas.
- * - closeManageListsModal: Cierra el modal.
- * - updateManageListsCurrentValues: Muestra visualmente los valores actuales.
- * - handleManageListsSave: Procesa la lógica de añadir/eliminar y guarda.
- * 2. setupEventListeners: Se actualizaron los listeners para conectar
- * los botones del nuevo modal (Guardar, Cancelar, Cambio de Columna).
- * 3. openBulkEditModal: Se asegura de ocultar el modal de listas si estaba abierto.
+ * script.js (Versión 17.3.1 - Corrección de Placeholder)
+ * ------------------------------------------------------------------
+ * Modificaciones v17.3.1:
+ * - (Basado en la v17.3)
+ * - Eliminada la línea 622 ('tabulatorInstance.setPlaceholder(...)')
+ * dentro de renderTable(), ya que era redundante y causaba un
+ * TypeError benigno después de una eliminación masiva.
+ * 'setData([])' es suficiente para mostrar el placeholder.
  */
 
-// --- Variable global para traducciones ---
-let i18n = {}; 
+// ============================================================
+// 0. VARIABLES GLOBALES
+// ============================================================
 
-// --- Variables de Estado Globales ---
+let i18n = {}; 
 let currentFileId = null; 
 let activeFilters = []; 
 let currentData = [];
@@ -25,15 +22,17 @@ let todasLasColumnas = [];
 let columnasVisibles = [];
 let currentView = 'detailed';
 let undoHistoryCount = 0;
-
-// --- Variable para Autocompletado ---
 let autocompleteOptions = {};
 
-// --- Instancias de Tabulator ---
+// Configuración global por defecto
+let systemSettings = {
+    enable_scf_intercompany: true,
+    enable_age_sort: true
+};
+
 let tabulatorInstance = null;
 let groupedTabulatorInstance = null; 
 
-// (Columnas agrupables)
 const COLUMNAS_AGRUPABLES = [
     "Vendor Name", "Status", "Assignee", 
     "Operating Unit Name", "Pay Status", "Document Type", 
@@ -41,9 +40,13 @@ const COLUMNAS_AGRUPABLES = [
     "Pay group", "WEC Email Inbox", "Sender Email", "Currency Code", "payment method"
 ];
 
-// ---
-// SECCIÓN 1: MANEJO DE COLUMNAS
-// ---
+// ============================================================
+// 1. MANEJO DE COLUMNAS
+// ============================================================
+
+/**
+ * Renderiza la lista de checkboxes para mostrar/ocultar columnas.
+ */
 function renderColumnSelector() {
     const wrapper = document.getElementById('column-selector-wrapper');
     if (!wrapper) return;
@@ -53,14 +56,14 @@ function renderColumnSelector() {
         return; 
     }
     
+    // Filtramos columnas internas que no deben ser seleccionables manualmente
     todasLasColumnas.filter(col => 
         col !== '_row_id' && 
         col !== '_priority' && 
+        col !== '_priority_reason' && 
         col !== 'Priority'
     ).forEach(columnName => {
-        
         const isChecked = columnasVisibles.includes(columnName);
-        
         let colText = columnName;
         if (columnName === '_row_status') { colText = "Row Status"; }
 
@@ -75,6 +78,9 @@ function renderColumnSelector() {
     });
 }
 
+/**
+ * Actualiza el array columnasVisibles basado en los checkboxes marcados.
+ */
 function updateVisibleColumnsFromCheckboxes() {
     const checkboxes = document.querySelectorAll('#column-selector-wrapper input[type="checkbox"]');
     columnasVisibles = [];
@@ -84,13 +90,11 @@ function updateVisibleColumnsFromCheckboxes() {
         }
     });
     
-    if (todasLasColumnas.includes('_row_id')) {
-        columnasVisibles.push('_row_id');
-    }
-    if (todasLasColumnas.includes('_priority')) {
-        columnasVisibles.push('_priority');
-    }
+    // Aseguramos columnas obligatorias
+    if (todasLasColumnas.includes('_row_id')) columnasVisibles.push('_row_id');
+    if (todasLasColumnas.includes('_priority')) columnasVisibles.push('_priority');
     
+    // Limpiamos duplicados o nombres reservados legacy
     if (columnasVisibles.includes('Priority')) {
         columnasVisibles = columnasVisibles.filter(col => col !== 'Priority');
     }
@@ -115,9 +119,13 @@ function handleUncheckAllColumns() {
     updateVisibleColumnsFromCheckboxes();
 }
 
-// ---
-// SECCIÓN 2: CONFIGURACIÓN INICIAL Y LISTENERS
-// ---
+// ============================================================
+// 2. CONFIGURACIÓN INICIAL Y LISTENERS
+// ============================================================
+
+/**
+ * Carga las traducciones del servidor.
+ */
 async function loadTranslations() {
     try {
         const response = await fetch('/api/get_translations');
@@ -130,6 +138,9 @@ async function loadTranslations() {
     updateDynamicText();
 }
 
+/**
+ * Configura todos los event listeners de la aplicación.
+ */
 function setupEventListeners() {
     const fileUploader = document.getElementById('file-uploader');
     const dragDropArea = document.querySelector('.drag-drop-label');
@@ -140,10 +151,9 @@ function setupEventListeners() {
     const btnCheckAllCols = document.getElementById('btn-check-all-cols');
     const btnUncheckAllCols = document.getElementById('btn-uncheck-all-cols');
 
+    // Helper para añadir listeners con seguridad
     const addSafeListener = (element, event, handler) => {
-        if (element) {
-            element.addEventListener(event, handler);
-        }
+        if (element) element.addEventListener(event, handler);
     };
 
     addSafeListener(document, 'keydown', handleGlobalKeydown);
@@ -168,11 +178,20 @@ function setupEventListeners() {
     addSafeListener(document.getElementById('btn-undo-change'), 'click', handleUndoChange);
     addSafeListener(document.getElementById('btn-commit-changes'), 'click', handleCommitChanges);
 
+
     // Listeners Bulk Edit
     addSafeListener(document.getElementById('btn-bulk-edit'), 'click', openBulkEditModal);
     addSafeListener(document.getElementById('btn-bulk-cancel'), 'click', closeBulkEditModal);
     addSafeListener(document.getElementById('btn-bulk-apply'), 'click', handleBulkEditApply);
     addSafeListener(document.getElementById('bulk-edit-column'), 'change', updateBulkEditAutocomplete);
+
+    // --- (INICIO - NUEVA LÍNEA v17.3) ---
+    // (Documentación: Añadido listener para el nuevo botón de eliminación masiva)
+    addSafeListener(document.getElementById('btn-bulk-delete'), 'click', handleBulkDelete);
+    // --- (FIN - NUEVA LÍNEA v17.3) ---
+
+    // (INICIO - NUEVO v16.8) Listener para el reporte de auditoría
+    addSafeListener(document.getElementById('btn-download-audit-log'), 'click', handleDownloadAuditLog);
 
     // Listeners Vistas
     addSafeListener(document.getElementById('btn-view-detailed'), 'click', () => toggleView('detailed'));
@@ -184,15 +203,36 @@ function setupEventListeners() {
     addSafeListener(document.getElementById('btn-download-excel-grouped'), 'click', handleDownloadExcelGrouped);
     addSafeListener(document.getElementById('active-filters-list-grouped'), 'click', handleRemoveFilter);
 
-    // (Documentación de Google: ¡MODIFICADO v15.3! Listeners del Nuevo Modal de Listas)
+    // Listeners Gestión de Listas
     addSafeListener(document.getElementById('btn-manage-lists'), 'click', openManageListsModal);
     addSafeListener(document.getElementById('btn-manage-cancel'), 'click', closeManageListsModal);
     addSafeListener(document.getElementById('btn-manage-save'), 'click', handleManageListsSave);
     addSafeListener(document.getElementById('manage-list-column'), 'change', updateManageListsCurrentValues);
 
+    // Listeners Reglas de Prioridad
+    addSafeListener(document.getElementById('btn-priority-rules'), 'click', openPriorityRulesModal);
+    addSafeListener(document.getElementById('btn-rules-close'), 'click', closePriorityRulesModal);
+    addSafeListener(document.getElementById('btn-add-rule'), 'click', handleAddRule);
+    addSafeListener(document.getElementById('btn-save-settings'), 'click', handleSaveSettings);
+    addSafeListener(document.getElementById('rule-column'), 'change', updateRuleValueAutocomplete);
+
+    // Listeners para Settings y Autocomplete de Reglas
+    addSafeListener(document.getElementById('btn-save-settings'), 'click', handleSaveSettings);
+    addSafeListener(document.getElementById('rule-column'), 'change', updateRuleValueAutocomplete);
+
+    // --- (INICIO - SECCIÓN MODIFICADA v17.1) ---
+    // (Documentación de Google: Se eliminan los listeners v17.0 del modal de duplicados genérico)
+    // (Documentación de Google: Se añaden los listeners v17.1 para el nuevo flujo específico)
+    addSafeListener(document.getElementById('btn-show-duplicates'), 'click', handleShowDuplicates);
+    addSafeListener(document.getElementById('btn-cleanup-duplicates'), 'click', handleCleanupDuplicates);
+    // --- (FIN - SECCIÓN MODIFICADA v17.1) ---
+
+    // Listeners Guardar Vista
     addSafeListener(document.getElementById('btn-save-view'), 'click', handleSaveView);
     addSafeListener(document.getElementById('input-load-view'), 'change', handleLoadView);
+    addSafeListener(document.getElementById('btn-save-view'), 'click', handleSaveView);
 
+    // Drag and Drop
     if (dragDropArea) {
         ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
             dragDropArea.addEventListener(eventName, (e) => { e.preventDefault(); e.stopPropagation(); }, false);
@@ -215,6 +255,9 @@ function setupEventListeners() {
     }
 }
 
+/**
+ * Actualiza textos dinámicos en la interfaz (Placeholders, etc).
+ */
 function updateDynamicText() {
     const valInput = document.getElementById('input-valor');
     const searchTableInput = document.getElementById('input-search-table');
@@ -232,6 +275,9 @@ function updateDynamicText() {
     }
 }
 
+/**
+ * Cambia el idioma de la sesión y recarga la página.
+ */
 async function setLanguage(langCode) {
     try { 
         await fetch(`/api/set_language/${langCode}`); 
@@ -240,9 +286,10 @@ async function setLanguage(langCode) {
     catch (error) { console.error('Error al cambiar idioma:', error); }
 }
 
-// ---
-// SECCIÓN 3: MANEJO de EVENTOS PRINCIPALES
-// ---
+// ============================================================
+// SECCIÓN 3: EVENTOS PRINCIPALES (Carga, Filtros)
+// ============================================================
+
 async function handleFileUpload(event) {
     const file = event.target.files[0]; if (!file) return;
     const fileUploadList = document.getElementById('file-upload-list');
@@ -254,50 +301,36 @@ async function handleFileUpload(event) {
                 <span class="file-name">${file.name}</span>
                 <span class="file-size">${fileSizeMB}MB</span>
             </div>
-        </div>
-    `;     
+        </div>`;    
 
     const formData = new FormData(); formData.append('file', file);
     try {
         const response = await fetch('/api/upload', { method: 'POST', body: formData });
         const result = await response.json(); if (!response.ok) throw new Error(result.error);
 
-        if (tabulatorInstance) {
-            tabulatorInstance.destroy();
-            tabulatorInstance = null;
-        }
-        if (groupedTabulatorInstance) { 
-            groupedTabulatorInstance.destroy();
-            groupedTabulatorInstance = null;
-        }
+        if (tabulatorInstance) { tabulatorInstance.destroy(); tabulatorInstance = null; }
+        if (groupedTabulatorInstance) { groupedTabulatorInstance.destroy(); groupedTabulatorInstance = null; }
 
         currentFileId = result.file_id;
         todasLasColumnas = result.columnas; 
-        
         columnasVisibles = [...todasLasColumnas];
-        
         autocompleteOptions = result.autocomplete_options || {};
         
         populateColumnDropdowns(); 
         renderColumnSelector(); 
-        
         updateVisibleColumnsFromCheckboxes();
         updateFilterInputAutocomplete();
-        
         resetResumenCard(); 
         
         activeFilters = []; 
         document.getElementById('input-search-table').value = ''; 
-        
         undoHistoryCount = 0; 
         updateActionButtonsVisibility(); 
-        
         toggleView('detailed', true); 
 
     } catch (error) { 
         console.error('Error en fetch /api/upload:', error); 
-        todasLasColumnas = []; 
-        columnasVisibles = []; 
+        todasLasColumnas = []; columnasVisibles = []; 
         fileUploadList.innerHTML = `<p style="color: red;">Error al cargar el archivo.</p>`;
     }
 }
@@ -311,9 +344,7 @@ async function handleAddFilter() {
     if (col && val) { 
         activeFilters.push({ columna: col, valor: val }); 
         valInput.value = ''; 
-        if (currentView === 'detailed') {
-            document.getElementById('input-search-table').value = ''; 
-        }
+        if (currentView === 'detailed') document.getElementById('input-search-table').value = ''; 
         await refreshActiveView();
     }
     else { alert(i18n['warning_no_filter'] || 'Select col and value'); }
@@ -321,9 +352,7 @@ async function handleAddFilter() {
 
 async function handleClearFilters() { 
     activeFilters = []; 
-    if (currentView === 'detailed') {
-        document.getElementById('input-search-table').value = ''; 
-    }
+    if (currentView === 'detailed') document.getElementById('input-search-table').value = ''; 
     await refreshActiveView(); 
 }
 
@@ -335,15 +364,9 @@ async function handleRemoveFilter(event) {
 }
 
 function handleFullscreen(event) {
-    const viewContainerId = (currentView === 'detailed') 
-        ? 'view-container-detailed' 
-        : 'view-container-grouped';
-    
+    const viewContainerId = (currentView === 'detailed') ? 'view-container-detailed' : 'view-container-grouped';
     const viewContainer = document.getElementById(viewContainerId);
-
-    const activeTableInstance = (currentView === 'detailed') 
-        ? tabulatorInstance 
-        : groupedTabulatorInstance;
+    const activeTableInstance = (currentView === 'detailed') ? tabulatorInstance : groupedTabulatorInstance;
 
     const iconExpand = `<path stroke-linecap="round" stroke-linejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" />`;
     const iconCollapse = `<path stroke-linecap="round" stroke-linejoin="round" d="M9 9V4.5M9 9H4.5M9 9L3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9V4.5M15 9h4.5M15 9l5.25-5.25M15 15v4.5M15 15h4.5M15 15l5.25 5.25" />`;
@@ -351,27 +374,13 @@ function handleFullscreen(event) {
     if (document.body.classList.contains('fullscreen-mode')) {
         document.body.classList.remove('fullscreen-mode');
         if (viewContainer) viewContainer.classList.remove('in-fullscreen');
-        
-        document.querySelectorAll('.icon-button[title="Pantalla Completa (Hotkey: G)"]').forEach(btn => {
-            const svg = btn.querySelector('svg');
-            if (svg) svg.innerHTML = iconExpand; 
-        });
-
+        document.querySelectorAll('.icon-button[title="Pantalla Completa (Hotkey: G)"]').forEach(btn => btn.querySelector('svg').innerHTML = iconExpand);
     } else {
         document.body.classList.add('fullscreen-mode');
         if (viewContainer) viewContainer.classList.add('in-fullscreen');
-
-        document.querySelectorAll('.icon-button[title="Pantalla Completa (Hotkey: G)"]').forEach(btn => { 
-            const svg = btn.querySelector('svg');
-            if (svg) svg.innerHTML = iconCollapse; 
-        });
+        document.querySelectorAll('.icon-button[title="Pantalla Completa (Hotkey: G)"]').forEach(btn => btn.querySelector('svg').innerHTML = iconCollapse);
     }
-
-    setTimeout(() => {
-        if (activeTableInstance) {
-            activeTableInstance.redraw(true);
-        }
-    }, 200); 
+    setTimeout(() => { if (activeTableInstance) activeTableInstance.redraw(true); }, 200); 
 }
 
 function handleSearchTable() {
@@ -379,20 +388,12 @@ function handleSearchTable() {
     const searchTerm = searchTableInput.value.toLowerCase();
     
     if (tabulatorInstance) {
-        if (!searchTerm) {
-            tabulatorInstance.clearFilter();
-        } else {
+        if (!searchTerm) { tabulatorInstance.clearFilter(); } 
+        else {
             tabulatorInstance.setFilter(function(data){
                 for(let col of columnasVisibles){ 
-                    let dataToSearch;
-                    if (col === '_row_id') {
-                        dataToSearch = data[col] + 1; 
-                    } else {
-                        dataToSearch = data[col];
-                    }
-                    if(dataToSearch && String(dataToSearch).toLowerCase().includes(searchTerm)){
-                        return true; 
-                    }
+                    let dataToSearch = (col === '_row_id') ? data[col] + 1 : data[col];
+                    if(dataToSearch && String(dataToSearch).toLowerCase().includes(searchTerm)) return true; 
                 }
                 return false; 
             });
@@ -401,492 +402,46 @@ function handleSearchTable() {
 }
 
 async function handleDownloadExcel() {
-    if (!currentFileId) { 
-        alert(i18n['no_data_to_download'] || "No hay datos para descargar."); 
-        return; 
-    }
+    if (!currentFileId) { alert(i18n['no_data_to_download'] || "No hay datos para descargar."); return; }
     const colsToDownload = columnasVisibles.filter(col => col !== 'Priority');
-    
     try {
         const response = await fetch('/api/download_excel', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                file_id: currentFileId, 
-                filtros_activos: activeFilters, 
-                columnas_visibles: colsToDownload 
-            })
+            body: JSON.stringify({ file_id: currentFileId, filtros_activos: activeFilters, columnas_visibles: colsToDownload })
         });
         if (!response.ok) throw new Error('Error del servidor al generar Excel.');
-        
         const blob = await response.blob(); 
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a'); 
-        a.href = url; 
-        a.download = 'datos_filtrados_detallado.xlsx';
-        document.body.appendChild(a); 
-        a.click(); 
-        document.body.removeChild(a); 
+        a.href = url; a.download = 'datos_filtrados_detallado.xlsx';
+        document.body.appendChild(a); a.click(); document.body.removeChild(a); 
         URL.revokeObjectURL(url);
-        
-    } catch (error) { 
-        console.error('Error en fetch /api/download_excel:', error); 
-        alert('Error al descargar el archivo: ' + error.message); 
-    }
+    } catch (error) { alert('Error al descargar el archivo: ' + error.message); }
 }
 
 async function handleDownloadExcelGrouped() {
     const select = document.getElementById('select-columna-agrupar');
     const colAgrupar = select ? select.value : null;
-
-    if (!currentFileId || !colAgrupar) {
-        alert("Por favor seleccione una columna para agrupar antes de descargar.");
-        return;
-    }
-    
+    if (!currentFileId || !colAgrupar) { alert("Por favor seleccione una columna para agrupar antes de descargar."); return; }
     try {
         const response = await fetch('/api/download_excel_grouped', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                file_id: currentFileId, 
-                filtros_activos: activeFilters, 
-                columna_agrupar: colAgrupar
-            })
+            body: JSON.stringify({ file_id: currentFileId, filtros_activos: activeFilters, columna_agrupar: colAgrupar })
         });
-        if (!response.ok) {
-            const err = await response.json();
-            throw new Error(err.error || 'Error del servidor al generar Excel.');
-        }
-        
+        if (!response.ok) throw new Error('Error del servidor al generar Excel.');
         const blob = await response.blob(); 
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a'); 
-        a.href = url; 
-        a.download = `datos_agrupados_por_${colAgrupar}.xlsx`;
-        document.body.appendChild(a); 
-        a.click(); 
-        document.body.removeChild(a); 
+        a.href = url; a.download = `datos_agrupados_por_${colAgrupar}.xlsx`;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a); 
         URL.revokeObjectURL(url);
-        
-    } catch (error) { 
-        console.error('Error en fetch /api/download_excel_grouped:', error); 
-        alert('Error al descargar el archivo: ' + error.message); 
-    }
+    } catch (error) { alert('Error al descargar el archivo: ' + error.message); }
 }
 
 // ============================================================
-// SECCIÓN 6: GESTIÓN DE LISTAS (MODAL) v15.3
+// SECCIÓN 4: RENDERIZADO DE TABLA
 // ============================================================
 
-/**
- * @description Abre el modal para administrar listas de autocompletado.
- * Reemplaza el antiguo sistema de 'prompt'.
- */
-function openManageListsModal() {
-    const overlay = document.getElementById('modal-overlay');
-    const modalLists = document.getElementById('manage-lists-modal');
-    const modalBulk = document.getElementById('bulk-edit-modal'); 
-    const selectCol = document.getElementById('manage-list-column');
-
-    // Asegurar que otros modales estén cerrados
-    if (modalBulk) modalBulk.style.display = 'none';
-    overlay.style.display = 'flex';
-    modalLists.style.display = 'flex';
-
-    // Cargar el dropdown
-    selectCol.innerHTML = '<option value="">Seleccione una columna...</option>';
-    
-    // Obtener las columnas que tienen autocompletado
-    const columnasConListas = Object.keys(autocompleteOptions).sort();
-
-    columnasConListas.forEach(col => {
-        const option = document.createElement('option');
-        option.value = col;
-        option.textContent = col;
-        selectCol.appendChild(option);
-    });
-
-    // Limpiar campos
-    document.getElementById('manage-list-input').value = '';
-    document.getElementById('current-list-values').innerHTML = '<em>Selecciona una columna para ver sus valores...</em>';
-}
-
-function closeManageListsModal() {
-    document.getElementById('modal-overlay').style.display = 'none';
-    document.getElementById('manage-lists-modal').style.display = 'none';
-}
-
-/**
- * @description Actualiza la caja de texto con los valores actuales de la lista.
- */
-function updateManageListsCurrentValues() {
-    const col = document.getElementById('manage-list-column').value;
-    const displayBox = document.getElementById('current-list-values');
-    
-    if (!col || !autocompleteOptions[col]) {
-        displayBox.innerHTML = '<em>(Lista vacía o no seleccionada)</em>';
-        return;
-    }
-
-    const values = autocompleteOptions[col];
-    if (values.length > 0) {
-        // Mostrar los valores como etiquetas pequeñas
-        const html = values.map(v => `<span style="display:inline-block; background:#eee; padding:2px 6px; margin:2px; border-radius:4px; border:1px solid #ddd;">${v}</span>`).join('');
-        displayBox.innerHTML = html;
-    } else {
-        displayBox.innerHTML = '<em>(Lista vacía)</em>';
-    }
-}
-
-/**
- * @description Guarda los cambios realizados en las listas (Añadir/Eliminar).
- */
-async function handleManageListsSave() {
-    const colToEdit = document.getElementById('manage-list-column').value;
-    const modificationsStr = document.getElementById('manage-list-input').value;
-
-    if (!colToEdit) {
-        alert("Por favor, selecciona qué columna quieres editar.");
-        return;
-    }
-
-    if (!modificationsStr.trim()) {
-        alert("No escribiste ningún cambio.");
-        return;
-    }
-
-    const currentValues = autocompleteOptions[colToEdit] || [];
-    const valuesSet = new Set(currentValues);
-
-    const modificationsArray = modificationsStr.split(',') 
-        .map(val => val.trim())   
-        .filter(val => val);      
-
-    let addedCount = 0;
-    let removedCount = 0;
-
-    modificationsArray.forEach(mod => {
-        if (mod.startsWith('-')) {
-            const valueToRemove = mod.substring(1).trim(); 
-            if (valuesSet.has(valueToRemove)) {
-                valuesSet.delete(valueToRemove);
-                removedCount++; 
-            }
-        } else {
-            const valueToAdd = mod.trim();
-            if (valueToAdd && !valuesSet.has(valueToAdd)) {
-                valuesSet.add(valueToAdd);
-                addedCount++; 
-            }
-        }
-    });
-
-    const newValuesArray = Array.from(valuesSet).sort();
-    autocompleteOptions[colToEdit] = newValuesArray;
-
-    try {
-        const response = await fetch('/api/save_autocomplete_lists', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(autocompleteOptions) 
-        });
-        
-        if (!response.ok) throw new Error('Error del servidor al guardar');
-        
-        alert(`¡Listas guardadas para '${colToEdit}'!\n\n` +
-              `Añadidos: ${addedCount}\n` +
-              `Eliminados: ${removedCount}\n\n` +
-              `Los cambios se aplicarán la próxima vez que cargues un archivo.`);
-        
-        closeManageListsModal();
-        
-        if (currentView === 'detailed' && tabulatorInstance) {
-            renderTable();
-        }
-
-    } catch (error) {
-        console.error("Error al guardar las listas:", error);
-        alert("Error al guardar las listas: " + error.message);
-        autocompleteOptions[colToEdit] = currentValues;
-    }
-}
-
-
-function handleGlobalKeydown(event) {
-    const target = event.target;
-    const isTyping = target.tagName === 'INPUT' || 
-                     target.tagName === 'SELECT' || 
-                     target.tagName === 'TEXTAREA' ||
-                     target.isContentEditable ||
-                     (target.classList && target.classList.contains('tabulator-editing'));
-
-    if (isTyping) return; 
-
-    let handled = true; 
-
-    switch (event.key) {
-        case 'a': 
-        case 'A': 
-            if (currentFileId && currentView === 'detailed') handleAddRow();
-            break;
-        case 'z':
-        case 'Z':
-            if (undoHistoryCount > 0 && currentView === 'detailed') handleUndoChange();
-            break;
-        case 's':
-        case 'S':
-            if (undoHistoryCount > 0 && currentView === 'detailed') handleCommitChanges();
-            break;
-        case 'Delete': 
-            if (activeFilters.length > 0) handleClearFilters();
-            break;
-        case 'f':
-        case 'F':
-            if (currentView === 'detailed') {
-                const searchInput = document.getElementById('input-search-table');
-                if (searchInput) searchInput.focus();
-            }
-            break;
-        case 'g': 
-        case 'G':
-            handleFullscreen();
-            break;
-        default:
-            handled = false; 
-            break;
-    }
-
-    if (handled) event.preventDefault();
-}
-
-// ---
-// FUNCIONES DE EDICIÓN (INDIVIDUAL)
-// ---
-async function handleAddRow() {
-    if (!currentFileId) {
-        alert("Por favor, cargue un archivo primero.");
-        return;
-    }
-    try {
-        const response = await fetch('/api/add_row', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ file_id: currentFileId })
-        });
-
-        const result = await response.json();
-        if (!response.ok) throw new Error(result.error);
-        
-        undoHistoryCount = result.history_count;
-        updateActionButtonsVisibility(); 
-        
-        await getFilteredData();
-        
-        if (result.new_row_id && tabulatorInstance) {
-            setTimeout(() => {
-                tabulatorInstance.scrollToRow(result.new_row_id, "bottom", false);
-                const row = tabulatorInstance.getRow(result.new_row_id);
-                if (row) {
-                    const rowElement = row.getElement();
-                    if (rowElement) {
-                        rowElement.style.backgroundColor = "#FFF9E5"; 
-                        setTimeout(() => {
-                            if (rowElement) rowElement.style.backgroundColor = ""; 
-                            if(row) row.reformat();
-                        }, 2000);
-                    }
-                }
-            }, 100);
-        }
-    } catch (error) {
-        console.error("Error al añadir fila:", error);
-        alert("Error al añadir fila: " + error.message);
-    }
-}
-
-async function handleDeleteRow(row_id) {
-    if (!currentFileId) {
-        alert("Error: No hay archivo cargado.");
-        return;
-    }
-    try {
-        const response = await fetch('/api/delete_row', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                file_id: currentFileId,
-                row_id: row_id
-            })
-        });
-
-        const result = await response.json();
-        if (!response.ok) throw new Error(result.error);
-        
-        undoHistoryCount = result.history_count;
-        updateActionButtonsVisibility(); 
-        await getFilteredData();
-    } catch (error) {
-        console.error("Error al eliminar fila:", error);
-        alert("Error al eliminar fila: " + error.message);
-    }
-}
-
-async function handleUndoChange() {
-    if (undoHistoryCount === 0 || !currentFileId) return;
-    
-    try {
-        const response = await fetch('/api/undo_change', {
-            method: 'POST', 
-            headers: { 'Content-Type': 'application/json' }, 
-            body: JSON.stringify({ file_id: currentFileId }) 
-        });
-
-        const result = await response.json();
-        if (!response.ok) throw new Error(result.error);
-        
-        undoHistoryCount = result.history_count;
-        updateActionButtonsVisibility(); 
-
-        if (result.affected_row_id && tabulatorInstance) {
-            const rowId = result.affected_row_id;
-            let renderAttempts = 0;      
-            const maxAttempts = 3;       
-            
-            const scrollOnce = () => {
-                renderAttempts++;
-                const row = tabulatorInstance.getRow(rowId);
-                
-                if (row) {
-                    tabulatorInstance.off("renderComplete", scrollOnce); 
-                    tabulatorInstance.scrollToRow(row, "center", false)
-                    .then(() => {
-                        const rowElement = row.getElement();
-                        if (rowElement) {
-                            rowElement.style.backgroundColor = "#FFF9E5"; 
-                            setTimeout(() => {
-                                if (rowElement) rowElement.style.backgroundColor = ""; 
-                                if(row) row.reformat();
-                            }, 2000);
-                        }
-                    })
-                    .catch(err => { console.warn(`scrollToRow falló`, err); });
-                } else if (renderAttempts >= maxAttempts) {
-                    tabulatorInstance.off("renderComplete", scrollOnce); 
-                }
-            };
-            tabulatorInstance.on("renderComplete", scrollOnce);
-        }
-        await getFilteredData();
-    } catch (error) {
-        console.error("Error al deshacer el cambio:", error);
-        alert("Error al deshacer: " + error.message);
-    }
-}
-
-async function handleCommitChanges() {
-    if (undoHistoryCount === 0 || !currentFileId) return;
-    if (!confirm("¿Estás seguro de que quieres consolidar todos los cambios?\n\nEsta acción guardará el estado actual y limpiará el historial de deshacer.")) return;
-    
-    try {
-        const response = await fetch('/api/commit_changes', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ file_id: currentFileId })
-        });
-
-        const result = await response.json();
-        if (!response.ok) throw new Error(result.error);
-        
-        alert(result.message);
-        undoHistoryCount = 0; 
-        updateActionButtonsVisibility(); 
-
-    } catch (error) {
-        console.error("Error al consolidar cambios:", error);
-        alert("Error al consolidar: " + error.message);
-    }
-}
-
-// ---
-// FUNCIONES DE GESTIÓN DE VISTAS (JSON)
-// ---
-function handleSaveView() {
-    if (!currentFileId) {
-        alert(i18n['no_data_to_save_view'] || "Cargue un archivo primero para guardar una vista.");
-        return;
-    }
-    const groupByColElement = document.getElementById('select-columna-agrupar');
-    const viewConfig = {
-        viewType: currentView,
-        activeFilters: activeFilters,
-        visibleColumns: columnasVisibles,
-        groupByColumn: groupByColElement ? groupByColElement.value : ""
-    };
-
-    const jsonString = JSON.stringify(viewConfig, null, 2);
-    const blob = new Blob([jsonString], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'mi_vista_config.json';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-}
-
-function handleLoadView(event) {
-    const file = event.target.files[0];
-    if (!file || file.type !== 'application/json') {
-        alert(i18n['invalid_json_file'] || "Por favor, seleccione un archivo .json válido.");
-        event.target.value = null; 
-        return;
-    }
-    if (!currentFileId) {
-        alert(i18n['load_excel_first'] || "Por favor, cargue primero un archivo Excel antes de cargar una vista.");
-        event.target.value = null; 
-        return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-        try {
-            const config = JSON.parse(e.target.result);
-            activeFilters = config.activeFilters || [];
-            
-            const loadedVisibleCols = config.visibleColumns || todasLasColumnas;
-            columnasVisibles = loadedVisibleCols.filter(col => todasLasColumnas.includes(col));
-
-            const viewType = config.viewType || 'detailed';
-            const groupByCol = config.groupByColumn || '';
-            
-            const checkboxes = document.querySelectorAll('#column-selector-wrapper input[type="checkbox"]');
-            checkboxes.forEach(cb => {
-                cb.checked = columnasVisibles.includes(cb.value);
-            });
-            
-            const groupBySelect = document.getElementById('select-columna-agrupar');
-            if (groupBySelect) {
-                if (groupBySelect.querySelector(`option[value="${groupByCol}"]`)) {
-                    groupBySelect.value = groupByCol;
-                } else {
-                    groupBySelect.value = ""; 
-                }
-            }
-            toggleView(viewType, true); 
-        } catch (error) {
-            console.error("Error al parsear el archivo JSON:", error);
-            alert(i18n['json_parse_error'] || "Error al leer el archivo JSON.");
-        }
-    };
-    reader.onerror = () => { alert(i18n['file_read_error'] || "No se pudo leer el archivo."); };
-    reader.readAsText(file);
-    event.target.value = null;
-}
-
-// ---
-// SECCIÓN 4: LÓGICA DE DATOS Y RENDERIZADO
-// ---
 function updateResumenCard(resumen_data) {
     if (!resumen_data) return; 
     const totalFacturas = document.getElementById('resumen-total-facturas');
@@ -911,17 +466,13 @@ function renderFilters() {
     const filtersListDiv = document.getElementById(listId);
     const btnClear = document.getElementById(clearBtnId);
     
-    document.getElementById('active-filters-list').innerHTML = '';
-    document.getElementById('active-filters-list-grouped').innerHTML = '';
-    document.getElementById('btn-clear-filters').style.display = 'none';
-    document.getElementById('btn-clear-filters-grouped').style.display = 'none';
+    if (filtersListDiv) filtersListDiv.innerHTML = '';
+    if (btnClear) btnClear.style.display = 'none';
     
     if (!filtersListDiv || !btnClear) return; 
 
-    if (activeFilters.length === 0) { 
-        btnClear.style.display = 'none';
-        return; 
-    }
+    if (activeFilters.length === 0) return;
+    
     btnClear.style.display = 'inline-block';
     
     activeFilters.forEach((filtro, index) => {
@@ -940,10 +491,6 @@ function renderFilters() {
     });
 }
 
-/**
- * @description Renderiza la tabla DETALLADA.
- * (Versión 15.2: Corrección de selectores Tabulator v5)
- */
 function renderTable(data = null, forceClear = false) {
     const resultsTableDiv = document.getElementById('results-table');
     if (!resultsTableDiv) return; 
@@ -970,50 +517,42 @@ function renderTable(data = null, forceClear = false) {
     
     const columnDefs = [
         {
-            formatter: "rowSelection", 
-            titleFormatter: "rowSelection", // Checkbox en el header
-            width: 40,
-            hozAlign: "center",
-            headerSort: false,
-            frozen: true 
+            formatter: "rowSelection", titleFormatter: "rowSelection",
+            width: 40, hozAlign: "center", headerSort: false, frozen: true 
         },
         {
-            title: "", 
-            field: "delete",
-            width: 40,
-            hozAlign: "center",
-            headerSort: false,
-            frozen: true,
+            title: "", field: "delete", width: 40, hozAlign: "center", headerSort: false, frozen: true,
             formatter: function(cell){ return '<i class="fas fa-trash-alt delete-icon"></i>'; },
             cellClick: function(e, cell){
                 if (!confirm("¿Estás seguro de que quieres eliminar esta fila?")) return; 
-                const rowId = cell.getRow().getData()._row_id;
-                handleDeleteRow(rowId);
+                handleDeleteRow(cell.getRow().getData()._row_id);
             }
         },
         {
-            title: "N°",
-            field: "_row_id", 
-            width: 70,
-            hozAlign: "right",
-            headerSort: true,
-            frozen: true, 
+            title: "N°", field: "_row_id", width: 70, hozAlign: "right", headerSort: true, frozen: true, 
             formatter: function(cell) { return cell.getValue() + 1; }
         },
         {
-            title: "Prioridad",
-            field: "_priority",
-            width: 100,
-            hozAlign: "left",
-            headerSort: true,
-            editable: false, 
-            frozen: true, 
+            title: "Prioridad", field: "_priority", width: 100, hozAlign: "left", headerSort: true, editable: false, frozen: true, 
+            
+            // Tooltip personalizado
+            tooltip: function(e, cell) {
+                const data = cell.getRow().getData();
+                return data._priority_reason || "Sin razón específica";
+            },
+
             sorter: function(a, b, aRow, bRow, column, dir, sorterParams){
                 const priorityMap = { "Alta": 3, "Media": 2, "Baja": 1, "": 0, null: 0 };
                 const aPrioVal = priorityMap[a] || 0;
                 const bPrioVal = priorityMap[b] || 0;
                 const prioDiff = aPrioVal - bPrioVal;
                 if (prioDiff !== 0) return prioDiff;
+                
+                // Respetar configuración de edad (Settings)
+                if (systemSettings && systemSettings.enable_age_sort === false) {
+                    return 0; 
+                }
+
                 const aData = aRow.getData();
                 const bData = bRow.getData();
                 const aAge = Number(aData['Invoice Date Age']) || 0;
@@ -1065,7 +604,7 @@ function renderTable(data = null, forceClear = false) {
             editable: isEditable, 
             editorParams: editorParams,
             mutatorEdit: mutatorEdit, 
-            formatter: formatter,     
+            formatter: formatter,    
             minWidth: 150, 
             visible: true, 
         });
@@ -1078,12 +617,15 @@ function renderTable(data = null, forceClear = false) {
             const placeholderText = (activeFilters.length > 0 || document.getElementById('input-search-table').value)
                 ? (i18n['no_filters_applied'] || 'No results for these filters.')
                 : (i18n['info_upload'] || 'No data found.');
-            tabulatorInstance.setPlaceholder(placeholderText);
+            
+            // --- (INICIO - CORRECCIÓN v17.3.1) ---
+            // (Documentación: Línea eliminada para prevenir el TypeError benigno)
+            // tabulatorInstance.setPlaceholder(placeholderText); // <-- (Línea 622 eliminada)
+            // (Documentación: setData([]) es suficiente para que Tabulator muestre el placeholder original)
+            // --- (FIN - CORRECCIÓN v17.3.1) ---
         }
-
     } else {
         tabulatorInstance = new Tabulator(resultsTableDiv, {
-            // (Documentación de Google: Corrección Tabulator v5)
             selectableRows: true,
             
             rowFormatter: function(row) {
@@ -1103,15 +645,31 @@ function renderTable(data = null, forceClear = false) {
             placeholder: `<p>${i18n['info_upload'] || 'Upload file'}</p>`,
         });
 
+        // --- (INICIO - SECCIÓN MODIFICADA v17.3) ---
+        // (Documentación: Esta función ahora controla AMBOS botones, Edición y Eliminación)
         tabulatorInstance.on("rowSelectionChanged", function(data, rows){
-            const btnBulk = document.getElementById('btn-bulk-edit');
+            // (Documentación: Obtenemos ambos botones de acción)
+            const btnBulkEdit = document.getElementById('btn-bulk-edit');
+            const btnBulkDelete = document.getElementById('btn-bulk-delete');
+
+            // (Documentación: Si no existen los botones, no hacemos nada)
+            if (!btnBulkEdit || !btnBulkDelete) return;
+
             if (rows.length > 0) {
-                btnBulk.style.display = 'inline-block';
-                btnBulk.textContent = `Editar (${rows.length})`;
+                // (Documentación: Mostrar ambos botones)
+                btnBulkEdit.style.display = 'inline-block';
+                btnBulkDelete.style.display = 'inline-block';
+                
+                // (Documentación: Actualizar contadores de ambos botones)
+                btnBulkEdit.textContent = `Editar (${rows.length})`;
+                btnBulkDelete.textContent = `${i18n['btn_bulk_delete'] || 'Eliminar'} (${rows.length})`;
             } else {
-                btnBulk.style.display = 'none';
+                // (Documentación: Ocultar ambos botones si no hay selección)
+                btnBulkEdit.style.display = 'none';
+                btnBulkDelete.style.display = 'none';
             }
         });
+        // --- (FIN - SECCIÓN MODIFICADA v17.3) ---
 
         tabulatorInstance.on("cellEdited", async function(cell){
             const newValue = cell.getValue();
@@ -1130,14 +688,8 @@ function renderTable(data = null, forceClear = false) {
             
             try {
                 const response = await fetch('/api/update_cell', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        file_id: currentFileId,
-                        row_id: rowId,
-                        columna: colField,
-                        valor: newValue
-                    })
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ file_id: currentFileId, row_id: rowId, columna: colField, valor: newValue })
                 });
                 
                 const result = await response.json();
@@ -1173,16 +725,19 @@ function renderTable(data = null, forceClear = false) {
     }
 }
 
-
-// ---
+// ============================================================
 // SECCIÓN 5: LÓGICA DE VISTAS
-// ---
+// ============================================================
 function updateActionButtonsVisibility() {
     const btnUndo = document.getElementById('btn-undo-change');
     const btnCommit = document.getElementById('btn-commit-changes');
-    const btnAddRow = document.getElementById('btn-add-row'); 
+    const btnAddRow = document.getElementById('btn-add-row');
     
-    if (!btnUndo || !btnCommit || !btnAddRow) return;
+    // (NUEVO v16.8) Obtenemos el nuevo botón
+    const btnAuditLog = document.getElementById('btn-download-audit-log');
+    
+    // (NUEVO v16.8) Añadimos la comprobación del nuevo botón
+    if (!btnUndo || !btnCommit || !btnAddRow || !btnAuditLog) return;
     
     if (undoHistoryCount > 0 && currentView === 'detailed') {
         btnUndo.style.display = 'inline-block';
@@ -1195,8 +750,12 @@ function updateActionButtonsVisibility() {
     
     if (currentFileId && currentView === 'detailed') {
          btnAddRow.style.display = 'inline-block';
+         // (NUEVO v16.8) Mostrar el botón de auditoría si hay un archivo cargado
+         btnAuditLog.style.display = 'inline-block';
     } else {
          btnAddRow.style.display = 'none';
+         // (NUEVO v16.8) Ocultar el botón de auditoría si no hay archivo
+         btnAuditLog.style.display = 'none';
     }
 }
 
@@ -1216,11 +775,7 @@ async function getFilteredData() {
     const resultsHeader = document.getElementById('results-header');
     
     if (!currentFileId) { 
-        currentData = []; 
-        tableData = []; 
-        renderFilters(); 
-        renderTable(null, true); 
-        resetResumenCard(); 
+        currentData = []; tableData = []; renderFilters(); renderTable(null, true); resetResumenCard(); 
         if (resultsHeader) resultsHeader.textContent = i18n['results_header']?.split('(')[0] || 'Results'; 
         return; 
     }
@@ -1265,13 +820,8 @@ async function getGroupedData() {
         resultsDiv.innerHTML = `<p>Agrupando datos...</p>`;
 
         const response = await fetch('/api/group_by', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                file_id: currentFileId, 
-                filtros_activos: activeFilters,
-                columna_agrupar: colAgrupar
-            })
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ file_id: currentFileId, filtros_activos: activeFilters, columna_agrupar: colAgrupar })
         });
 
         const result = await response.json();
@@ -1449,18 +999,15 @@ function updateFilterInputAutocomplete() {
 }
 
 // ============================================================
-// NUEVAS FUNCIONES DE EDICIÓN MASIVA (BULK EDIT) v15.2
+// SECCIÓN 6: MODALES Y GESTIÓN DE LISTAS/BULK EDIT
 // ============================================================
 
-// 1. Abrir el Modal de Bulk Edit
+// --- Bulk Edit ---
+
 function openBulkEditModal() {
     if (!tabulatorInstance) return;
-    
     const selectedRows = tabulatorInstance.getSelectedData();
-    if (selectedRows.length === 0) {
-        alert("No hay filas seleccionadas.");
-        return;
-    }
+    if (selectedRows.length === 0) { alert("No hay filas seleccionadas."); return; }
 
     const countText = document.getElementById('bulk-edit-count');
     countText.textContent = `Vas a editar ${selectedRows.length} filas seleccionadas.`;
@@ -1471,56 +1018,51 @@ function openBulkEditModal() {
     todasLasColumnas.forEach(col => {
         if (col.startsWith('_') || col === 'Priority') return; 
         const option = document.createElement('option');
-        option.value = col;
-        option.textContent = col;
+        option.value = col; option.textContent = col;
         colSelect.appendChild(option);
     });
 
     document.getElementById('bulk-edit-value').value = '';
     document.getElementById('bulk-edit-value-list').innerHTML = '';
 
-    // Aseguramos que el otro modal esté oculto
-    const manageModal = document.getElementById('manage-lists-modal');
-    if (manageModal) manageModal.style.display = 'none';
+    // Ocultar otros modales
+    document.getElementById('manage-lists-modal').style.display = 'none';
+    document.getElementById('priority-rules-modal').style.display = 'none';
+    
+    // --- (INICIO - MODIFICACIÓN v17.3) ---
+    // (Documentación: Ocultar el modal de duplicados (que ya no existe, pero es buena práctica))
+    const dupModal = document.getElementById('duplicates-modal');
+    if (dupModal) dupModal.style.display = 'none';
+    // --- (FIN - MODIFICACIÓN v17.3) ---
 
     document.getElementById('bulk-edit-modal').style.display = 'flex';
     document.getElementById('modal-overlay').style.display = 'flex';
 }
 
-// 2. Cerrar el Modal de Bulk Edit
 function closeBulkEditModal() {
     document.getElementById('modal-overlay').style.display = 'none';
     document.getElementById('bulk-edit-modal').style.display = 'none';
 }
 
-// 3. Actualizar Autocompletado del Modal (UX)
 function updateBulkEditAutocomplete() {
     const col = document.getElementById('bulk-edit-column').value;
     const list = document.getElementById('bulk-edit-value-list');
     list.innerHTML = '';
-    
     if (autocompleteOptions[col]) {
         autocompleteOptions[col].forEach(val => {
             const opt = document.createElement('option');
-            opt.value = val;
-            list.appendChild(opt);
+            opt.value = val; list.appendChild(opt);
         });
     }
 }
 
-// 4. Aplicar Cambios de Bulk Edit
 async function handleBulkEditApply() {
     if (!tabulatorInstance || !currentFileId) return;
-
     const selectedRows = tabulatorInstance.getSelectedData();
     const col = document.getElementById('bulk-edit-column').value;
     const val = document.getElementById('bulk-edit-value').value;
 
-    if (!col) {
-        alert("Por favor, seleccione una columna.");
-        return;
-    }
-    
+    if (!col) { alert("Por favor, seleccione una columna."); return; }
     if (!confirm(`¿Estás seguro de cambiar "${col}" a "${val}" en ${selectedRows.length} filas?`)) return;
 
     const rowIds = selectedRows.map(r => r._row_id);
@@ -1536,21 +1078,16 @@ async function handleBulkEditApply() {
                 new_value: val
             })
         });
-
         const result = await response.json();
         if (!response.ok) throw new Error(result.error);
 
         alert(result.message); 
-        
         undoHistoryCount = result.history_count;
         if (result.resumen) updateResumenCard(result.resumen);
         updateActionButtonsVisibility();
         
         closeBulkEditModal();
-        
-        // (Corrección Tabulator v5)
         tabulatorInstance.deselectRow(); 
-        
         await getFilteredData();
 
     } catch (error) {
@@ -1558,9 +1095,900 @@ async function handleBulkEditApply() {
         alert("Error al aplicar los cambios: " + error.message);
     }
 }
-// ---
-// ¡BLOQUE DE INICIALIZACIÓN!
-// ---
+
+// --- Manage Lists ---
+
+function openManageListsModal() {
+    const overlay = document.getElementById('modal-overlay');
+    const modalLists = document.getElementById('manage-lists-modal');
+    const modalBulk = document.getElementById('bulk-edit-modal'); 
+    const modalRules = document.getElementById('priority-rules-modal');
+    
+    // --- (INICIO - MODIFICACIÓN v17.3) ---
+    // (Documentación: Ocultar el modal de duplicados (que ya no existe, pero es buena práctica))
+    const modalDuplicates = document.getElementById('duplicates-modal');
+    // --- (FIN - MODIFICACIÓN v17.3) ---
+
+    if (modalBulk) modalBulk.style.display = 'none';
+    if (modalRules) modalRules.style.display = 'none';
+    
+    // --- (INICIO - MODIFICACIÓN v17.3) ---
+    if (modalDuplicates) modalDuplicates.style.display = 'none';
+    // --- (FIN - MODIFICACIÓN v17.3) ---
+    
+    overlay.style.display = 'flex';
+    modalLists.style.display = 'flex';
+
+    const selectCol = document.getElementById('manage-list-column');
+    selectCol.innerHTML = '<option value="">Seleccione una columna...</option>';
+    const columnasConListas = Object.keys(autocompleteOptions).sort();
+    columnasConListas.forEach(col => {
+        const option = document.createElement('option');
+        option.value = col; option.textContent = col;
+        selectCol.appendChild(option);
+    });
+
+    document.getElementById('manage-list-input').value = '';
+    document.getElementById('current-list-values').innerHTML = '<em>Selecciona una columna para ver sus valores...</em>';
+}
+
+function closeManageListsModal() {
+    document.getElementById('modal-overlay').style.display = 'none';
+    document.getElementById('manage-lists-modal').style.display = 'none';
+}
+
+function updateManageListsCurrentValues() {
+    const col = document.getElementById('manage-list-column').value;
+    const displayBox = document.getElementById('current-list-values');
+    if (!col || !autocompleteOptions[col]) {
+        displayBox.innerHTML = '<em>(Lista vacía o no seleccionada)</em>'; return;
+    }
+    const values = autocompleteOptions[col];
+    if (values.length > 0) {
+        const html = values.map(v => `<span style="display:inline-block; background:#eee; padding:2px 6px; margin:2px; border-radius:4px; border:1px solid #ddd;">${v}</span>`).join('');
+        displayBox.innerHTML = html;
+    } else {
+        displayBox.innerHTML = '<em>(Lista vacía)</em>';
+    }
+}
+
+async function handleManageListsSave() {
+    const colToEdit = document.getElementById('manage-list-column').value;
+    const modificationsStr = document.getElementById('manage-list-input').value;
+
+    if (!colToEdit) { alert("Selecciona qué columna editar."); return; }
+    if (!modificationsStr.trim()) { alert("No escribiste cambios."); return; }
+
+    const currentValues = autocompleteOptions[colToEdit] || [];
+    const valuesSet = new Set(currentValues);
+    const modificationsArray = modificationsStr.split(',').map(val => val.trim()).filter(val => val);   
+
+    let addedCount = 0; let removedCount = 0;
+    modificationsArray.forEach(mod => {
+        if (mod.startsWith('-')) {
+            const valueToRemove = mod.substring(1).trim(); 
+            if (valuesSet.has(valueToRemove)) { valuesSet.delete(valueToRemove); removedCount++; }
+        } else {
+            const valueToAdd = mod.trim();
+            if (valueToAdd && !valuesSet.has(valueToAdd)) { valuesSet.add(valueToAdd); addedCount++; }
+        }
+    });
+
+    const newValuesArray = Array.from(valuesSet).sort();
+    autocompleteOptions[colToEdit] = newValuesArray;
+
+    try {
+        const response = await fetch('/api/save_autocomplete_lists', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(autocompleteOptions) 
+        });
+        if (!response.ok) throw new Error('Error del servidor');
+        
+        alert(`Listas guardadas.\nAñadidos: ${addedCount}\nEliminados: ${removedCount}`);
+        closeManageListsModal();
+        if (currentView === 'detailed' && tabulatorInstance) renderTable();
+
+    } catch (error) {
+        console.error("Error guardar listas:", error);
+        alert("Error al guardar: " + error.message);
+        autocompleteOptions[colToEdit] = currentValues;
+    }
+}
+
+// ============================================================
+// SECCIÓN 7: REGLAS DE PRIORIDAD (v16.7.2 FIX)
+// ============================================================
+
+// Autocompletado para valor de regla
+function updateRuleValueAutocomplete() {
+    const colSelect = document.getElementById('rule-column');
+    const dataList = document.getElementById('rule-value-datalist');
+    if (!colSelect || !dataList) return;
+
+    const colName = colSelect.value;
+    dataList.innerHTML = ''; // Limpiar
+
+    if (autocompleteOptions && autocompleteOptions[colName]) {
+        autocompleteOptions[colName].forEach(val => {
+            const opt = document.createElement('option');
+            opt.value = val;
+            dataList.appendChild(opt);
+        });
+    }
+}
+
+// --- (INICIO DE LA CORRECCIÓN v16.7.2) ---
+/**
+ * (Documentación de Google: Inicio)
+ * Propósito: Resetea (limpia) los campos del formulario de "Añadir Regla".
+ * * Se llama al cerrar el modal o al guardar una regla exitosamente
+ * para prevenir que datos antiguos persistan en el formulario.
+ * (Esta función corrige el bug reportado).
+ * (Documentación de Google: Fin)
+ */
+function resetAddRuleForm() {
+    const ruleColSelect = document.getElementById('rule-column');
+    const ruleValueInput = document.getElementById('rule-value');
+    const rulePrioSelect = document.getElementById('rule-priority');
+    const ruleReasonInput = document.getElementById('rule-reason');
+    const ruleDatalist = document.getElementById('rule-value-datalist');
+
+    // (Reseteamos todos los campos a su estado inicial)
+    if (ruleColSelect) ruleColSelect.value = "";
+    if (ruleValueInput) ruleValueInput.value = "";
+    if (rulePrioSelect) rulePrioSelect.value = "Media"; // (Resetear a 'Media')
+    if (ruleReasonInput) ruleReasonInput.value = "";
+    if (ruleDatalist) ruleDatalist.innerHTML = ""; // (Limpiar autocomplete)
+}
+// --- (FIN DE LA CORRECCIÓN v16.7.2) ---
+
+
+async function openPriorityRulesModal() {
+    const overlay = document.getElementById('modal-overlay');
+    const modalRules = document.getElementById('priority-rules-modal');
+    const modalBulk = document.getElementById('bulk-edit-modal');
+    const modalLists = document.getElementById('manage-lists-modal');
+    
+    // --- (INICIO - MODIFICACIÓN v17.3) ---
+    // (Documentación: Ocultar el modal de duplicados (que ya no existe, pero es buena práctica))
+    const modalDuplicates = document.getElementById('duplicates-modal');
+    // --- (FIN - MODIFICACIÓN v17.3) ---
+    
+    // Ocultar otros modales
+    if (modalBulk) modalBulk.style.display = 'none';
+    if (modalLists) modalLists.style.display = 'none';
+
+    // --- (INICIO - MODIFICACIÓN v17.3) ---
+    if (modalDuplicates) modalDuplicates.style.display = 'none';
+    // --- (FIN - MODIFICACIÓN v17.3) ---
+    
+    overlay.style.display = 'flex';
+    modalRules.style.display = 'flex';
+
+    // 1. Llenar Dropdown de columnas (solo columnas útiles)
+    const ruleColSelect = document.getElementById('rule-column');
+    ruleColSelect.innerHTML = '<option value="">Seleccione columna...</option>';
+    todasLasColumnas.forEach(col => {
+        if (!col.startsWith('_') && col !== 'Priority') {
+            const opt = document.createElement('option');
+            opt.value = col; opt.textContent = col;
+            ruleColSelect.appendChild(opt);
+        }
+    });
+
+    // 2. Cargar reglas y settings
+    const listContainer = document.getElementById('rules-list-container');
+    listContainer.innerHTML = '<em>Cargando reglas...</em>';
+    
+    try {
+        const response = await fetch('/api/priority_rules/get');
+        const data = await response.json();
+        
+        renderRulesList(data.rules);
+        
+        // Cargar Settings Globales
+        systemSettings = data.settings || systemSettings;
+        document.getElementById('setting-scf').checked = systemSettings.enable_scf_intercompany;
+        document.getElementById('setting-age-sort').checked = systemSettings.enable_age_sort;
+        
+    } catch (e) {
+        listContainer.innerHTML = '<span style="color:red">Error cargando reglas.</span>';
+    }
+}
+/**
+ * (Documentación de Google: Inicio)
+ * Propósito: Cierra el modal de reglas.
+ * (MODIFICADO v16.7.2)
+ * Se añade la llamada a `resetAddRuleForm` para limpiar el formulario
+ * cada vez que el usuario cierra el modal.
+ * (Documentación de Google: Fin)
+ */
+function closePriorityRulesModal() {
+    document.getElementById('modal-overlay').style.display = 'none';
+    document.getElementById('priority-rules-modal').style.display = 'none';
+
+    // --- (INICIO DE LA CORRECCIÓN v16.7.2) ---
+    // (Llamamos a la función de limpieza al cerrar)
+    resetAddRuleForm();
+    // --- (FIN DE LA CORRECCIÓN v16.7.2) ---
+}
+
+function renderRulesList(rules) {
+    const container = document.getElementById('rules-list-container');
+    container.innerHTML = '';
+    
+    if (!rules || rules.length === 0) {
+        container.innerHTML = '<em>No hay reglas definidas.</em>';
+        return;
+    }
+
+    rules.forEach(rule => {
+        const div = document.createElement('div');
+        div.className = 'rule-item';
+        
+        const opacityStyle = rule.active ? '' : 'opacity: 0.5;';
+        const activeChecked = rule.active ? 'checked' : '';
+        
+        div.innerHTML = `
+            <div style="display:flex; align-items:center; gap:10px; ${opacityStyle} flex-grow:1;">
+                <input type="checkbox" class="toggle-rule-active" data-col="${rule.column}" data-val="${rule.value}" ${activeChecked} title="Activar/Desactivar">
+                <span>
+                    Si <strong>${rule.column}</strong> es <strong>"${rule.value}"</strong> 
+                    &rarr; <strong>${rule.priority}</strong>
+                </span>
+            </div>
+            <button class="btn-delete-rule" title="Eliminar">&times;</button>
+        `;
+        
+        div.querySelector('.btn-delete-rule').addEventListener('click', () => {
+            if(confirm(`¿Eliminar regla para "${rule.value}"?`)) {
+                handleDeleteRule(rule.column, rule.value);
+            }
+        });
+        
+        div.querySelector('.toggle-rule-active').addEventListener('change', (e) => {
+            handleToggleRule(rule.column, rule.value, e.target.checked);
+        });
+        
+        container.appendChild(div);
+    });
+}
+
+/**
+ * Guarda la configuración global y recarga la vista.
+ * CORREGIDO: Ahora usa getFilteredData() en vez de redraw().
+ */
+async function handleSaveSettings() {
+    const scf = document.getElementById('setting-scf').checked;
+    const age = document.getElementById('setting-age-sort').checked;
+    
+    try {
+        await fetch('/api/priority_rules/save_settings', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ enable_scf_intercompany: scf, enable_age_sort: age })
+        });
+        systemSettings.enable_age_sort = age; 
+        alert("Configuración guardada.");
+        
+        // FIX CRÍTICO: Redibujar tabla completa con nuevos datos del servidor
+        if (currentFileId) await getFilteredData(); 
+
+    } catch (e) { alert("Error: " + e.message); }
+}
+
+/**
+ * Activa/Desactiva una regla y refresca.
+ */
+async function handleToggleRule(col, val, status) {
+    await fetch('/api/priority_rules/toggle', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ column: col, value: val, active: status })
+    });
+    // Recargar datos inmediatamente para reflejar el cambio
+    if (currentFileId) await getFilteredData();
+}
+
+/**
+ * (Documentación de Google: Inicio)
+ * Propósito: Añade una nueva regla y refresca.
+ * (MODIFICADO v16.7.2)
+ * Llama a `resetAddRuleForm` después de guardar exitosamente
+ * para limpiar el formulario y permitir añadir otra regla.
+ * (Documentación de Google: Fin)
+ */
+async function handleAddRule() {
+    const col = document.getElementById('rule-column').value;
+    const val = document.getElementById('rule-value').value;
+    const prio = document.getElementById('rule-priority').value;
+    const reason = document.getElementById('rule-reason').value;
+
+    if (!col || !val || !reason) {
+        alert("Por favor completa todos los campos.");
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/priority_rules/save', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ column: col, value: val, priority: prio, reason: reason, active: true })
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error);
+
+        alert("Regla guardada correctamente.");
+        
+        // Recargar lista visual de reglas
+        const listRes = await fetch('/api/priority_rules/get');
+        const data = await listRes.json();
+        renderRulesList(data.rules);
+        
+        // --- (INICIO DE LA CORRECCIÓN v16.7.2) ---
+        // (Limpiamos el formulario después de guardar)
+        resetAddRuleForm();
+        // --- (FIN DE LA CORRECCIÓN v16.7.2) ---
+        
+        // Recargar datos de la tabla
+        if (currentFileId) {
+            if (result.resumen) updateResumenCard(result.resumen);
+            await getFilteredData();
+        }
+
+    } catch (e) {
+        alert("Error al guardar regla: " + e.message);
+    }
+}
+
+async function handleDeleteRule(col, val) {
+    try {
+        const response = await fetch('/api/priority_rules/delete', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ column: col, value: val })
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error);
+
+        const listRes = await fetch('/api/priority_rules/get');
+        const data = await listRes.json();
+        renderRulesList(data.rules);
+
+        if (currentFileId) {
+            if (result.resumen) updateResumenCard(result.resumen);
+            await getFilteredData();
+        }
+
+    } catch (e) {
+        alert("Error al eliminar regla: " + e.message);
+    }
+}
+
+// ============================================================
+// SECCIÓN 8: FUNCIONES DE EDICIÓN (INDIVIDUAL)
+// ============================================================
+
+function handleGlobalKeydown(event) {
+    const target = event.target;
+    const isTyping = target.tagName === 'INPUT' || 
+                       target.tagName === 'SELECT' || 
+                       target.tagName === 'TEXTAREA' ||
+                       target.isContentEditable ||
+                       (target.classList && target.classList.contains('tabulator-editing'));
+
+    if (isTyping) return; 
+
+    let handled = true; 
+
+    switch (event.key) {
+        case 'a': 
+        case 'A': 
+            if (currentFileId && currentView === 'detailed') handleAddRow();
+            break;
+        case 'z':
+        case 'Z':
+            if (undoHistoryCount > 0 && currentView === 'detailed') handleUndoChange();
+            break;
+        case 's':
+        case 'S':
+            if (undoHistoryCount > 0 && currentView === 'detailed') handleCommitChanges();
+            break;
+        case 'Delete': 
+            if (activeFilters.length > 0) handleClearFilters();
+            break;
+        case 'f':
+        case 'F':
+            if (currentView === 'detailed') {
+                const searchInput = document.getElementById('input-search-table');
+                if (searchInput) searchInput.focus();
+            }
+            break;
+        case 'g': 
+        case 'G':
+            handleFullscreen();
+            break;
+        default:
+            handled = false; 
+            break;
+    }
+
+    if (handled) event.preventDefault();
+}
+
+async function handleAddRow() {
+    if (!currentFileId) {
+        alert("Por favor, cargue un archivo primero.");
+        return;
+    }
+    try {
+        const response = await fetch('/api/add_row', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ file_id: currentFileId })
+        });
+
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error);
+        
+        undoHistoryCount = result.history_count;
+        updateActionButtonsVisibility(); 
+        
+        await getFilteredData();
+        
+        if (result.new_row_id && tabulatorInstance) {
+            setTimeout(() => {
+                tabulatorInstance.scrollToRow(result.new_row_id, "bottom", false);
+                const row = tabulatorInstance.getRow(result.new_row_id);
+                if (row) {
+                    const rowElement = row.getElement();
+                    if (rowElement) {
+                        rowElement.style.backgroundColor = "#FFF9E5"; 
+                        setTimeout(() => {
+                            if (rowElement) rowElement.style.backgroundColor = ""; 
+                            if(row) row.reformat();
+                        }, 2000);
+                    }
+                }
+            }, 100);
+        }
+    } catch (error) {
+        console.error("Error al añadir fila:", error);
+        alert("Error al añadir fila: " + error.message);
+    }
+}
+
+async function handleDeleteRow(row_id) {
+    if (!currentFileId) {
+        alert("Error: No hay archivo cargado.");
+        return;
+    }
+    try {
+        const response = await fetch('/api/delete_row', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                file_id: currentFileId,
+                row_id: row_id
+            })
+        });
+
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error);
+        
+        undoHistoryCount = result.history_count;
+        updateActionButtonsVisibility(); 
+        await getFilteredData();
+    } catch (error) {
+        console.error("Error al eliminar fila:", error);
+        alert("Error al eliminar fila: " + error.message);
+    }
+}
+
+// --- (INICIO - NUEVA FUNCIÓN v17.3) ---
+/**
+ * (Documentación de Google: Inicio - v17.3)
+ * Propósito: Elimina masivamente las filas seleccionadas (checkboxes).
+ * Llama al endpoint /api/bulk_delete_rows.
+ * Es 'undoable'.
+ * (Documentación de Google: Fin)
+ */
+async function handleBulkDelete() {
+    // (Documentación: 1. Validar que la tabla exista)
+    if (!tabulatorInstance || !currentFileId) return;
+    
+    // (Documentación: 2. Obtener filas seleccionadas)
+    const selectedRows = tabulatorInstance.getSelectedData();
+    
+    if (selectedRows.length === 0) {
+        alert("No hay filas seleccionadas para eliminar.");
+        return;
+    }
+
+    // (Documentación: 3. Confirmación del usuario)
+    if (!confirm(`¿Estás seguro de que quieres eliminar ${selectedRows.length} filas?\n\nEsta acción se puede deshacer.`)) {
+        return;
+    }
+
+    // (Documentación: 4. Extraer los IDs)
+    const rowIds = selectedRows.map(r => r._row_id);
+
+    try {
+        // (Documentación: 5. Llamar a la nueva API de backend)
+        const response = await fetch('/api/bulk_delete_rows', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                file_id: currentFileId,
+                row_ids: rowIds
+            })
+        });
+        
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error);
+
+        // (Documentación: 6. Mostrar éxito)
+        alert(result.message); // (Ej: "Se eliminaron 5 filas. Esta acción se puede deshacer.")
+        
+        // (Documentación: 7. Actualizar la UI (Contador de Deshacer, KPIs))
+        undoHistoryCount = result.history_count;
+        if (result.resumen) updateResumenCard(result.resumen);
+        updateActionButtonsVisibility(); // (Esto actualizará el contador del botón 'Deshacer')
+        
+        // (Documentación: 8. Deseleccionar filas en la tabla)
+        tabulatorInstance.deselectRow(); 
+        
+        // (Documentación: 9. Refrescar los datos de la tabla)
+        await getFilteredData();
+
+    } catch (error) {
+        console.error("Error en Eliminación Masiva (Bulk Delete):", error);
+        alert("Error al eliminar las filas: " + error.message);
+    }
+}
+// --- (FIN - NUEVA FUNCIÓN v17.3) ---
+
+
+async function handleUndoChange() {
+    if (undoHistoryCount === 0 || !currentFileId) return;
+    
+    try {
+        const response = await fetch('/api/undo_change', {
+            method: 'POST', 
+            headers: { 'Content-Type': 'application/json' }, 
+            body: JSON.stringify({ file_id: currentFileId }) 
+        });
+
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error);
+        
+        undoHistoryCount = result.history_count;
+        updateActionButtonsVisibility(); 
+
+        // --- (INICIO - MODIFICACIÓN v17.3) ---
+        // (Documentación: Si fue una acción masiva (bulk), no intentamos hacer scroll)
+        if (result.affected_row_id && result.affected_row_id !== 'bulk' && tabulatorInstance) {
+        // --- (FIN - MODIFICACIÓN v17.3) ---
+            const rowId = result.affected_row_id;
+            let renderAttempts = 0;   
+            const maxAttempts = 3;    
+            
+            const scrollOnce = () => {
+                renderAttempts++;
+                const row = tabulatorInstance.getRow(rowId);
+                
+                if (row) {
+                    tabulatorInstance.off("renderComplete", scrollOnce); 
+                    tabulatorInstance.scrollToRow(row, "center", false)
+                    .then(() => {
+                        const rowElement = row.getElement();
+                        if (rowElement) {
+                            rowElement.style.backgroundColor = "#FFF9E5"; 
+                            setTimeout(() => {
+                                if (rowElement) rowElement.style.backgroundColor = ""; 
+                                if(row) row.reformat();
+                            }, 2000);
+                        }
+                    })
+                    .catch(err => { console.warn(`scrollToRow falló`, err); });
+                } else if (renderAttempts >= maxAttempts) {
+                    tabulatorInstance.off("renderComplete", scrollOnce); 
+                }
+            };
+            tabulatorInstance.on("renderComplete", scrollOnce);
+        }
+        await getFilteredData();
+    } catch (error) {
+        console.error("Error al deshacer el cambio:", error);
+        alert("Error al deshacer: " + error.message);
+    }
+}
+
+async function handleCommitChanges() {
+    if (undoHistoryCount === 0 || !currentFileId) return;
+    if (!confirm("¿Estás seguro de que quieres consolidar todos los cambios?\n\nEsta acción guardará el estado actual y limpiará el historial de deshacer.")) return;
+    
+    try {
+        const response = await fetch('/api/commit_changes', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ file_id: currentFileId })
+        });
+
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error);
+        
+        alert(result.message);
+        undoHistoryCount = 0; 
+        updateActionButtonsVisibility(); 
+
+    } catch (error) {
+        console.error("Error al consolidar cambios:", error);
+        alert("Error al consolidar: " + error.message);
+    }
+}
+
+
+/**
+ * (INICIO - NUEVO v16.8)
+ * (Documentación de Google: Esta función maneja la descarga del reporte de auditoría.)
+ * Propósito: Descarga el reporte de auditoría de la sesión actual.
+ * Llama al endpoint /api/download_audit_log que creamos en app.py.
+ */
+async function handleDownloadAuditLog() {
+    // (Documentación de Google: Verificamos que un archivo esté cargado.)
+    if (!currentFileId) {
+        alert(i18n['no_data_to_download'] || "No hay datos para descargar.");
+        return;
+    }
+
+    try {
+        // (Documentación de Google: Llamamos a la API de Flask.)
+        const response = await fetch('/api/download_audit_log', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ file_id: currentFileId })
+        });
+
+        // (Documentación de Google: Manejamos el caso de error)
+        if (!response.ok) {
+            const errorResult = await response.json();
+            throw new Error(errorResult.error || 'Error del servidor al generar el reporte.');
+        }
+
+        // (Documentación de Google: El backend devuelve un archivo TXT (blob).)
+        const blob = await response.blob();
+        
+        // (Documentación de Google: Creamos un enlace temporal para descargar el archivo.)
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        
+        // --- (ESTA ES LA LÍNEA MODIFICADA) ---
+        // (Documentación de Google: Asignamos el nombre de archivo .txt)
+        a.download = 'reporte_auditoria_sesion.txt'; // (Cambiado de .csv a .txt)
+        // --- (FIN DE LA MODIFICACIÓN) ---
+
+        document.body.appendChild(a);
+        a.click(); // (Simulamos el clic para iniciar la descarga.)
+        document.body.removeChild(a); // (Limpiamos el enlace temporal.)
+        URL.revokeObjectURL(url);
+
+    } catch (error) {
+        // (Documentación de Google: Mostramos cualquier error al usuario.)
+        console.error('Error al descargar el reporte de auditoría:', error);
+        alert('Error al descargar el reporte: ' + error.message);
+    }
+}
+
+// ============================================================
+// (INICIO - SECCIÓN ELIMINADA v17.1)
+// ============================================================
+// (Documentación de Google: Se ha eliminado la "SECCIÓN 8B: CONTROL DE DUPLICADOS (v17.0)")
+// (Documentación de Google: Las funciones openDuplicatesModal, closeDuplicatesModal, y)
+// (Documentación de Google: handleFindDuplicates han sido eliminadas.)
+// ============================================================
+
+// ============================================================
+// (INICIO - NUEVA SECCIÓN v17.1) 
+// SECCIÓN 8B: FLUJO DE DUPLICADOS DE FACTURAS (v17.1)
+// ============================================================
+
+/**
+ * (Documentación de Google: Inicio - v17.1)
+ * Propósito: Muestra solo las filas de facturas duplicadas (basado en 'Invoice #').
+ * Llama al endpoint /api/get_duplicate_invoices que creamos en app.py.
+ * Usa la función renderTable() para mostrar *solo* los resultados,
+ * sin alterar los filtros globales (activeFilters).
+ * (Documentación de Google: Fin)
+ */
+async function handleShowDuplicates() {
+    // (Documentación de Google: 1. Validar que haya un archivo cargado)
+    if (!currentFileId) {
+        alert(i18n['info_upload'] || "Cargue un archivo primero.");
+        return;
+    }
+    
+    // (Documentación de Google: (Opcional: Mostrar un spinner o feedback))
+    // (En este caso, usamos un 'alert' al final)
+
+    try {
+        // (Documentación de Google: 2. Llamar al nuevo endpoint de VISUALIZACIÓN)
+        const response = await fetch('/api/get_duplicate_invoices', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ file_id: currentFileId })
+        });
+
+        const result = await response.json();
+        // (Documentación de Google: Manejar error del backend, ej. "columna no encontrada")
+        if (!response.ok) throw new Error(result.error);
+
+        // (Documentación de Google: 3. Analizar la respuesta)
+        if (result.num_filas > 0) {
+            alert(`Se encontraron ${result.num_filas} filas duplicadas. Mostrando solo duplicados.`);
+            
+            // (Documentación de Google: 4. Renderizar la tabla solo con los datos recibidos)
+            // (Documentación de Google: Pasamos 'result.data' directamente a renderTable)
+            // (Documentación de Google: Esto NO usa 'activeFilters')
+            renderTable(result.data); 
+            
+            // (Documentación de Google: 5. Limpiamos los filtros de la UI para evitar confusión)
+            // (Documentación de Google: El usuario ve duplicados, no filtros)
+            activeFilters = [];
+            renderFilters();
+            
+        } else {
+            // (Documentación de Google: No se encontraron duplicados)
+            alert("¡Buenas noticias! No se encontraron duplicados.");
+        }
+    } catch (error) {
+        console.error('Error al buscar duplicados:', error);
+        alert(`Error: ${error.message}`);
+    }
+}
+
+/**
+ * (Documentación de Google: Inicio - v17.1)
+ * Propósito: Elimina permanentemente las filas duplicadas (conservando la 1ra).
+ * Llama al endpoint /api/cleanup_duplicate_invoices.
+ * (MODIFICADO v17.2) - Esta acción ahora se puede deshacer.
+ * (Documentación de Google: Fin)
+ */
+async function handleCleanupDuplicates() {
+    // (Documentación de Google: 1. Validar que haya un archivo cargado)
+    if (!currentFileId) {
+        alert(i18n['info_upload'] || "Cargue un archivo primero.");
+        return;
+    }
+
+    // (Documentación de Google: 2. Pedir confirmación al usuario)
+    if (!confirm(
+        "¿Estás seguro de que deseas eliminar permanentemente todas las facturas duplicadas?\n\n" +
+        "Esta acción conservará la PRIMERA aparición de cada factura y eliminará el resto.\n\n" +
+        "Esta acción se puede deshacer." // (v17.2)
+    )) {
+        alert('Limpieza cancelada.');
+        return;
+    }
+
+    // (Documentación de Google: (Opcional: Mostrar spinner global))
+    // ( ... )
+
+    try {
+        // (Documentación de Google: 3. Llamar al nuevo endpoint de ACCIÓN/LIMPIEZA)
+        const response = await fetch('/api/cleanup_duplicate_invoices', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ file_id: currentFileId })
+        });
+
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error);
+        
+        // (Documentación de Google: 4. Mostrar mensaje de éxito/info del backend)
+        alert(result.message); // (v17.2 - El mensaje ahora dice "se puede deshacer")
+
+        // (Documentación de Google: 5. Actualizar la UI con los datos del backend)
+        if (result.resumen) updateResumenCard(result.resumen);
+        
+        // (Documentación de Google: (v17.2) Actualizamos el contador de 'undo')
+        undoHistoryCount = result.history_count;
+        updateActionButtonsVisibility();
+        
+        // (Documentación de Google: 6. CRÍTICO - Refrescar toda la vista de datos)
+        // (Documentación de Google: Llamamos a la función principal de filtro)
+        // (Documentación de Google: (que ahora obtendrá los datos limpios de la sesión))
+        await getFilteredData();
+
+    } catch (error) {
+        console.error('Error al limpiar duplicados:', error);
+        alert(`Error al limpiar duplicados: ${error.message}`);
+    }
+}
+// ============================================================
+// (FIN - NUEVA SECCIÓN v17.1)
+// ============================================================
+
+// ============================================================
+// SECCIÓN 9: GESTIÓN DE VISTAS (Guardar/Cargar JSON)
+// ============================================================
+
+function handleSaveView() {
+    if (!currentFileId) {
+        alert(i18n['no_data_to_save_view'] || "Cargue un archivo primero para guardar una vista.");
+        return;
+    }
+    const groupByColElement = document.getElementById('select-columna-agrupar');
+    const viewConfig = {
+        viewType: currentView,
+        activeFilters: activeFilters,
+        visibleColumns: columnasVisibles,
+        groupByColumn: groupByColElement ? groupByColElement.value : ""
+    };
+
+    const jsonString = JSON.stringify(viewConfig, null, 2);
+    const blob = new Blob([jsonString], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'mi_vista_config.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+function handleLoadView(event) {
+    const file = event.target.files[0];
+    if (!file || file.type !== 'application/json') {
+        alert(i18n['invalid_json_file'] || "Por favor, seleccione un archivo .json válido.");
+        event.target.value = null; 
+        return;
+    }
+    if (!currentFileId) {
+        alert(i18n['load_excel_first'] || "Por favor, cargue primero un archivo Excel antes de cargar una vista.");
+        event.target.value = null; 
+        return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+        try {
+            const config = JSON.parse(e.target.result);
+            activeFilters = config.activeFilters || [];
+            
+            const loadedVisibleCols = config.visibleColumns || todasLasColumnas;
+            columnasVisibles = loadedVisibleCols.filter(col => todasLasColumnas.includes(col));
+
+            const viewType = config.viewType || 'detailed';
+            const groupByCol = config.groupByColumn || '';
+            
+            const checkboxes = document.querySelectorAll('#column-selector-wrapper input[type="checkbox"]');
+            checkboxes.forEach(cb => {
+                cb.checked = columnasVisibles.includes(cb.value);
+            });
+            
+            const groupBySelect = document.getElementById('select-columna-agrupar');
+            if (groupBySelect) {
+                if (groupBySelect.querySelector(`option[value="${groupByCol}"]`)) {
+                    groupBySelect.value = groupByCol;
+                } else {
+                    groupBySelect.value = ""; 
+                }
+            }
+            toggleView(viewType, true); 
+        } catch (error) {
+            console.error("Error al parsear el archivo JSON:", error);
+            alert(i18n['json_parse_error'] || "Error al leer el archivo JSON.");
+        }
+    };
+    reader.onerror = () => { alert(i18n['file_read_error'] || "No se pudo leer el archivo."); };
+    reader.readAsText(file);
+    event.target.value = null;
+}
+
+// ============================================================
+// INICIALIZACIÓN
+// ============================================================
+
 document.addEventListener('DOMContentLoaded', async (event) => {
     
     await loadTranslations();

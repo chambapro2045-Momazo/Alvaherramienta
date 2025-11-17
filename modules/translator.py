@@ -1,4 +1,6 @@
 # modules/translator.py
+# (Modificado v17.2 para añadir claves de limpieza de duplicados)
+# (Modificado v17.3 para añadir clave de eliminación masiva)
 
 # Diccionario de traducciones
 LANGUAGES = {
@@ -45,7 +47,18 @@ LANGUAGES = {
         "group_max_amount": "Monto Máximo",
         "group_invoice_count": "Conteo de Facturas",
         "manage_lists_header": "4. Administrar Listas",
-        "manage_lists_button": "Editar Listas de Autocompletado"
+        "manage_lists_button": "Editar Listas de Autocompletado",
+        
+        # --- (INICIO - LÍNEAS v17.1) ---
+        "data_cleaning_header": "Limpieza de Datos",
+        "data_cleaning_desc": "Acciones específicas para limpiar facturas duplicadas (basado en 'Invoice #').",
+        "btn_show_duplicates": "Mostrar Solo Duplicados",
+        "btn_cleanup_duplicates": "Limpiar Duplicados (Mantener 1ro)",
+        # --- (FIN - LÍNEAS v17.1) ---
+
+        # --- (INICIO - NUEVA LÍNEA v17.3) ---
+        "btn_bulk_delete": "Eliminar Seleccionados"
+        # --- (FIN - NUEVA LÍNEA v17.3) ---
     },
     "en": {
         "title": "Dynamic Invoice Search",
@@ -90,7 +103,18 @@ LANGUAGES = {
         "group_max_amount": "Maximum Amount",
         "group_invoice_count": "Invoice Count",
         "manage_lists_header": "4. Manage Lists",
-        "manage_lists_button": "Edit Autocomplete Lists"
+        "manage_lists_button": "Edit Autocomplete Lists",
+        
+        # --- (INICIO - LÍNEAS v17.1) ---
+        "data_cleaning_header": "Data Cleaning",
+        "data_cleaning_desc": "Specific actions to clean duplicate invoices (based on 'Invoice #').",
+        "btn_show_duplicates": "Show Duplicates Only",
+        "btn_cleanup_duplicates": "Cleanup Duplicates (Keep 1st)",
+        # --- (FIN - LÍNEAS v17.1) ---
+
+        # --- (INICIO - NUEVA LÍNEA v17.3) ---
+        "btn_bulk_delete": "Delete Selected"
+        # --- (FIN - NUEVA LÍNEA v17.3) ---
     }
 }
 

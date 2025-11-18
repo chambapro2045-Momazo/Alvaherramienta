@@ -1,6 +1,8 @@
 # modules/translator.py
 # (Modificado v17.2 para añadir claves de limpieza de duplicados)
 # (Modificado v17.3 para añadir clave de eliminación masiva)
+# (Modificado v17.4 para añadir claves de Buscar y Reemplazar)
+# (Modificado v17.4.1 para añadir claves de botones faltantes)
 
 # Diccionario de traducciones
 LANGUAGES = {
@@ -56,9 +58,22 @@ LANGUAGES = {
         "btn_cleanup_duplicates": "Limpiar Duplicados (Mantener 1ro)",
         # --- (FIN - LÍNEAS v17.1) ---
 
-        # --- (INICIO - NUEVA LÍNEA v17.3) ---
-        "btn_bulk_delete": "Eliminar Seleccionados"
-        # --- (FIN - NUEVA LÍNEA v17.3) ---
+        # --- (INICIO - LÍNEA v17.3) ---
+        "btn_bulk_delete": "Eliminar",
+        # --- (FIN - LÍNEA v17.3) ---
+
+        # --- (INICIO - LÍNEAS v17.4) ---
+        "btn_find_replace": "Buscar y Reemplazar...",
+        "find_replace_modal_title": "Buscar y Reemplazar en Selección",
+        "find_replace_find_label": "Buscar Texto (Coincidencia Exacta):",
+        "find_replace_replace_label": "Reemplazar con:",
+        "find_replace_apply_btn": "Aplicar Reemplazo",
+        # --- (FIN - LÍNEAS v17.4) ---
+        
+        # --- (INICIO - NUEVAS LÍNEAS v17.4.1) ---
+        "btn_bulk_edit": "Editar",
+        "btn_undo": "Deshacer"
+        # --- (FIN - NUEVAS LÍNEAS v17.4.1) ---
     },
     "en": {
         "title": "Dynamic Invoice Search",
@@ -112,9 +127,22 @@ LANGUAGES = {
         "btn_cleanup_duplicates": "Cleanup Duplicates (Keep 1st)",
         # --- (FIN - LÍNEAS v17.1) ---
 
-        # --- (INICIO - NUEVA LÍNEA v17.3) ---
-        "btn_bulk_delete": "Delete Selected"
-        # --- (FIN - NUEVA LÍNEA v17.3) ---
+        # --- (INICIO - LÍNEA v17.3) ---
+        "btn_bulk_delete": "Delete",
+        # --- (FIN - LÍNEA v17.3) ---
+        
+        # --- (INICIO - LÍNEAS v17.4) ---
+        "btn_find_replace": "Find and Replace...",
+        "find_replace_modal_title": "Find and Replace in Selection",
+        "find_replace_find_label": "Find Text (Exact Match):",
+        "find_replace_replace_label": "Replace with:",
+        "find_replace_apply_btn": "Apply Replacement",
+        # --- (FIN - NUEBAS LÍNEAS v17.4) ---
+        
+        # --- (INICIO - NUEVAS LÍNEAS v17.4.1) ---
+        "btn_bulk_edit": "Edit",
+        "btn_undo": "Undo"
+        # --- (FIN - NUEVAS LÍNEAS v17.4.1) ---
     }
 }
 

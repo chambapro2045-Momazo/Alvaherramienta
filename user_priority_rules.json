@@ -2,10 +2,10 @@
     "rules": [
         {
             "column": "Assignee",
-            "value": "alvaro.moncada@grupobimbo.com",
+            "value": "daniela.vasquez01@grupobimbo.com",
             "priority": "Alta",
             "reason": "Proveedores importantes asignados",
-            "active": true
+            "active": false
         }
     ],
     "settings": {

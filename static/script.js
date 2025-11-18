@@ -1,12 +1,18 @@
 /**
- * script.js (Versión 17.3.1 - Corrección de Placeholder)
+ * script.js (Versión 17.4 - Find/Replace y Bulk Delete)
  * ------------------------------------------------------------------
- * Modificaciones v17.3.1:
- * - (Basado en la v17.3)
- * - Eliminada la línea 622 ('tabulatorInstance.setPlaceholder(...)')
- * dentro de renderTable(), ya que era redundante y causaba un
- * TypeError benigno después de una eliminación masiva.
- * 'setData([])' es suficiente para mostrar el placeholder.
+ * Modificaciones v17.4:
+ * - (Portado por Gemini a la estructura v16.7.2 del usuario)
+ * - Añadida la lógica de "Eliminación Masiva" (v17.3).
+ * - Añadido listener para #btn-bulk-delete.
+ * - Añadida función handleBulkDelete() en la SECCIÓN 8.
+ * - Añadida la lógica de "Buscar y Reemplazar en Selección" (v17.4).
+ * - Añadido listener para #btn-find-replace y su modal.
+ * - Añadidas funciones openFindReplaceModal(), closeFindReplaceModal()
+ * y handleFindReplaceApply().
+ * - Modificado tabulatorInstance.on("rowSelectionChanged") para
+ * controlar los TRES botones de acción masiva (Editar, Eliminar, B/R).
+ * - Modificadas todas las funciones open...Modal() para ocultar el nuevo modal.
  */
 
 // ============================================================
@@ -185,10 +191,15 @@ function setupEventListeners() {
     addSafeListener(document.getElementById('btn-bulk-apply'), 'click', handleBulkEditApply);
     addSafeListener(document.getElementById('bulk-edit-column'), 'change', updateBulkEditAutocomplete);
 
-    // --- (INICIO - NUEVA LÍNEA v17.3) ---
-    // (Documentación: Añadido listener para el nuevo botón de eliminación masiva)
+    // --- (INICIO - NUEVO v17.3) ---
     addSafeListener(document.getElementById('btn-bulk-delete'), 'click', handleBulkDelete);
-    // --- (FIN - NUEVA LÍNEA v17.3) ---
+    // --- (FIN - NUEVO v17.3) ---
+
+    // --- (INICIO - NUEVO v17.4) ---
+    addSafeListener(document.getElementById('btn-find-replace'), 'click', openFindReplaceModal);
+    addSafeListener(document.getElementById('btn-find-replace-cancel'), 'click', closeFindReplaceModal);
+    addSafeListener(document.getElementById('btn-find-replace-apply'), 'click', handleFindReplaceApply);
+    // --- (FIN - NUEVO v17.4) ---
 
     // (INICIO - NUEVO v16.8) Listener para el reporte de auditoría
     addSafeListener(document.getElementById('btn-download-audit-log'), 'click', handleDownloadAuditLog);
@@ -645,31 +656,35 @@ function renderTable(data = null, forceClear = false) {
             placeholder: `<p>${i18n['info_upload'] || 'Upload file'}</p>`,
         });
 
-        // --- (INICIO - SECCIÓN MODIFICADA v17.3) ---
-        // (Documentación: Esta función ahora controla AMBOS botones, Edición y Eliminación)
+        // --- (INICIO - SECCIÓN MODIFICADA v17.4) ---
+        // (Documentación: Esta función ahora controla los TRES botones)
         tabulatorInstance.on("rowSelectionChanged", function(data, rows){
-            // (Documentación: Obtenemos ambos botones de acción)
+            // (Documentación: Obtenemos los tres botones de acción)
             const btnBulkEdit = document.getElementById('btn-bulk-edit');
             const btnBulkDelete = document.getElementById('btn-bulk-delete');
+            const btnFindReplace = document.getElementById('btn-find-replace');
 
             // (Documentación: Si no existen los botones, no hacemos nada)
-            if (!btnBulkEdit || !btnBulkDelete) return;
+            if (!btnBulkEdit || !btnBulkDelete || !btnFindReplace) return;
 
             if (rows.length > 0) {
-                // (Documentación: Mostrar ambos botones)
+                // (Documentación: Mostrar los tres botones)
                 btnBulkEdit.style.display = 'inline-block';
                 btnBulkDelete.style.display = 'inline-block';
+                btnFindReplace.style.display = 'inline-block';
                 
-                // (Documentación: Actualizar contadores de ambos botones)
-                btnBulkEdit.textContent = `Editar (${rows.length})`;
+                // (Documentación: Actualizar contadores de los tres botones)
+                btnBulkEdit.textContent = `${i18n['btn_bulk_edit'] || 'Editar'} (${rows.length})`;
                 btnBulkDelete.textContent = `${i18n['btn_bulk_delete'] || 'Eliminar'} (${rows.length})`;
+                btnFindReplace.textContent = `${i18n['btn_find_replace'] || 'Buscar y Reemplazar...'} (${rows.length})`;
             } else {
-                // (Documentación: Ocultar ambos botones si no hay selección)
+                // (Documentación: Ocultar los tres botones si no hay selección)
                 btnBulkEdit.style.display = 'none';
                 btnBulkDelete.style.display = 'none';
+                btnFindReplace.style.display = 'none';
             }
         });
-        // --- (FIN - SECCIÓN MODIFICADA v17.3) ---
+        // --- (FIN - SECCIÓN MODIFICADA v17.4) ---
 
         tabulatorInstance.on("cellEdited", async function(cell){
             const newValue = cell.getValue();
@@ -867,7 +882,8 @@ function toggleView(view, force = false) {
         populateGroupDropdown();
         const selectAgrupar = document.getElementById('select-columna-agrupar');
         if (selectAgrupar) {
-            const firstOption = selectAgrupar.querySelector('option[value!=""]');
+           // [FIX] Sintaxis CSS estándar para "value no es vacío"
+            const firstOption = selectAgrupar.querySelector('option:not([value=""])');
             if (firstOption && !selectAgrupar.value) { 
                 selectAgrupar.value = firstOption.value;
             }
@@ -1029,11 +1045,12 @@ function openBulkEditModal() {
     document.getElementById('manage-lists-modal').style.display = 'none';
     document.getElementById('priority-rules-modal').style.display = 'none';
     
-    // --- (INICIO - MODIFICACIÓN v17.3) ---
-    // (Documentación: Ocultar el modal de duplicados (que ya no existe, pero es buena práctica))
+    // --- (INICIO - MODIFICACIÓN v17.4) ---
+    // (Documentación: Ocultar el nuevo modal)
+    document.getElementById('find-replace-modal').style.display = 'none';
     const dupModal = document.getElementById('duplicates-modal');
     if (dupModal) dupModal.style.display = 'none';
-    // --- (FIN - MODIFICACIÓN v17.3) ---
+    // --- (FIN - MODIFICACIÓN v17.4) ---
 
     document.getElementById('bulk-edit-modal').style.display = 'flex';
     document.getElementById('modal-overlay').style.display = 'flex';
@@ -1043,6 +1060,58 @@ function closeBulkEditModal() {
     document.getElementById('modal-overlay').style.display = 'none';
     document.getElementById('bulk-edit-modal').style.display = 'none';
 }
+
+// --- (INICIO - NUEVAS FUNCIONES v17.4) ---
+/**
+ * (Documentación: Abre el modal de Buscar y Reemplazar)
+ */
+function openFindReplaceModal() {
+    if (!tabulatorInstance) return;
+    const selectedRows = tabulatorInstance.getSelectedData();
+    if (selectedRows.length === 0) { alert("No hay filas seleccionadas."); return; }
+
+    // (Documentación: Actualizar el contador de filas)
+    const countText = document.getElementById('find-replace-count');
+    countText.textContent = `Reemplazo se aplicará a ${selectedRows.length} filas seleccionadas.`;
+
+    // (Documentación: Poblar el dropdown de columnas)
+    const colSelect = document.getElementById('find-replace-column');
+    colSelect.innerHTML = '<option value="">Seleccione una columna...</option>';
+    
+    todasLasColumnas.forEach(col => {
+        // (Documentación: Excluir columnas internas/reservadas)
+        if (col.startsWith('_') || col === 'Priority') return; 
+        const option = document.createElement('option');
+        option.value = col; 
+        option.textContent = col;
+        colSelect.appendChild(option);
+    });
+
+    // (Documentación: Limpiar los inputs)
+    document.getElementById('find-replace-find-text').value = '';
+    document.getElementById('find-replace-replace-text').value = '';
+
+    // (Documentación: Ocultar otros modales)
+    document.getElementById('bulk-edit-modal').style.display = 'none';
+    document.getElementById('manage-lists-modal').style.display = 'none';
+    document.getElementById('priority-rules-modal').style.display = 'none';
+    const dupModal = document.getElementById('duplicates-modal');
+    if (dupModal) dupModal.style.display = 'none';
+
+    // (Documentación: Mostrar el modal)
+    document.getElementById('find-replace-modal').style.display = 'flex';
+    document.getElementById('modal-overlay').style.display = 'flex';
+}
+
+/**
+ * (Documentación: Cierra el modal de Buscar y Reemplazar)
+ */
+function closeFindReplaceModal() {
+    document.getElementById('modal-overlay').style.display = 'none';
+    document.getElementById('find-replace-modal').style.display = 'none';
+}
+// --- (FIN - NUEVAS FUNCIONES v17.4) ---
+
 
 function updateBulkEditAutocomplete() {
     const col = document.getElementById('bulk-edit-column').value;
@@ -1104,17 +1173,18 @@ function openManageListsModal() {
     const modalBulk = document.getElementById('bulk-edit-modal'); 
     const modalRules = document.getElementById('priority-rules-modal');
     
-    // --- (INICIO - MODIFICACIÓN v17.3) ---
-    // (Documentación: Ocultar el modal de duplicados (que ya no existe, pero es buena práctica))
+    // --- (INICIO - MODIFICACIÓN v17.4) ---
     const modalDuplicates = document.getElementById('duplicates-modal');
-    // --- (FIN - MODIFICACIÓN v17.3) ---
+    const modalFindReplace = document.getElementById('find-replace-modal');
+    // --- (FIN - MODIFICACIÓN v17.4) ---
 
     if (modalBulk) modalBulk.style.display = 'none';
     if (modalRules) modalRules.style.display = 'none';
     
-    // --- (INICIO - MODIFICACIÓN v17.3) ---
+    // --- (INICIO - MODIFICACIÓN v17.4) ---
     if (modalDuplicates) modalDuplicates.style.display = 'none';
-    // --- (FIN - MODIFICACIÓN v17.3) ---
+    if (modalFindReplace) modalFindReplace.style.display = 'none';
+    // --- (FIN - MODIFICACIÓN v17.4) ---
     
     overlay.style.display = 'flex';
     modalLists.style.display = 'flex';
@@ -1249,18 +1319,19 @@ async function openPriorityRulesModal() {
     const modalBulk = document.getElementById('bulk-edit-modal');
     const modalLists = document.getElementById('manage-lists-modal');
     
-    // --- (INICIO - MODIFICACIÓN v17.3) ---
-    // (Documentación: Ocultar el modal de duplicados (que ya no existe, pero es buena práctica))
+    // --- (INICIO - MODIFICACIÓN v17.4) ---
     const modalDuplicates = document.getElementById('duplicates-modal');
-    // --- (FIN - MODIFICACIÓN v17.3) ---
+    const modalFindReplace = document.getElementById('find-replace-modal');
+    // --- (FIN - MODIFICACIÓN v17.4) ---
     
     // Ocultar otros modales
     if (modalBulk) modalBulk.style.display = 'none';
     if (modalLists) modalLists.style.display = 'none';
 
-    // --- (INICIO - MODIFICACIÓN v17.3) ---
+    // --- (INICIO - MODIFICACIÓN v17.4) ---
     if (modalDuplicates) modalDuplicates.style.display = 'none';
-    // --- (FIN - MODIFICACIÓN v17.3) ---
+    if (modalFindReplace) modalFindReplace.style.display = 'none';
+    // --- (FIN - MODIFICACIÓN v17.4) ---
     
     overlay.style.display = 'flex';
     modalRules.style.display = 'flex';
@@ -1643,6 +1714,91 @@ async function handleBulkDelete() {
     }
 }
 // --- (FIN - NUEVA FUNCIÓN v17.3) ---
+
+// --- (INICIO - NUEVA FUNCIÓN v17.4) ---
+/**
+ * (Documentación de Google: Inicio - v17.4)
+ * Propósito: Aplica la lógica de "Buscar y Reemplazar" en las filas seleccionadas.
+ * Llama al endpoint /api/find_replace_in_selection.
+ * Es 'undoable'.
+ * (Documentación de Google: Fin)
+ */
+async function handleFindReplaceApply() {
+    // (Documentación: 1. Validar tabla y selección)
+    if (!tabulatorInstance || !currentFileId) return;
+    const selectedRows = tabulatorInstance.getSelectedData();
+    if (selectedRows.length === 0) {
+        alert("Error: Se perdieron las filas seleccionadas.");
+        return;
+    }
+
+    // (Documentación: 2. Obtener valores del modal)
+    const col = document.getElementById('find-replace-column').value;
+    const findText = document.getElementById('find-replace-find-text').value;
+    const replaceText = document.getElementById('find-replace-replace-text').value;
+
+    if (!col) {
+        alert("Por favor, seleccione una columna.");
+        return;
+    }
+    // (Documentación: Permitimos un 'find_text' vacío, pero no un 'replace_text' nulo)
+     if (findText === null || replaceText === null) {
+        alert("Error: Los campos de texto no pueden ser nulos.");
+        return;
+    }
+    
+    // (Documentación: 3. Confirmación del usuario)
+    if (!confirm(
+        `En ${selectedRows.length} filas seleccionadas:\n\n` +
+        `Buscar en columna: "${col}"\n` +
+        `Texto a buscar: "${findText}"\n` +
+        `Reemplazar con: "${replaceText}"\n\n` +
+        `¿Continuar? (Esta acción se puede deshacer)`
+    )) {
+        return;
+    }
+    
+    // (Documentación: 4. Extraer los IDs)
+    const rowIds = selectedRows.map(r => r._row_id);
+
+    try {
+        // (Documentación: 5. Llamar a la nueva API de backend)
+        const response = await fetch('/api/find_replace_in_selection', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                file_id: currentFileId,
+                row_ids: rowIds,
+                columna: col,
+                find_text: findText,
+                replace_text: replaceText
+            })
+        });
+        
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error);
+
+        // (Documentación: 6. Mostrar éxito)
+        alert(result.message); // (Ej: "Se reemplazaron 8 celdas.")
+        
+        // (Documentación: 7. Actualizar la UI (Contador de Deshacer, KPIs))
+        undoHistoryCount = result.history_count;
+        if (result.resumen) updateResumenCard(result.resumen);
+        updateActionButtonsVisibility();
+        
+        // (Documentación: 8. Cerrar modal y deseleccionar filas)
+        closeFindReplaceModal();
+        tabulatorInstance.deselectRow(); 
+        
+        // (Documentación: 9. Refrescar los datos de la tabla)
+        await getFilteredData();
+
+    } catch (error) {
+        console.error("Error en Buscar y Reemplazar:", error);
+        alert("Error al aplicar los cambios: " + error.message);
+    }
+}
+// --- (FIN - NUEVA FUNCIÓN v17.4) ---
 
 
 async function handleUndoChange() {

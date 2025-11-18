@@ -1,651 +1,259 @@
 /* =============================================================================
-   style.css
-   ---------
-   Hoja de estilos principal para "Mi Nuevo Buscador Web".
-   Diseño limpio tipo Dashboard con soporte para Tabulator, Modales y KPIs.
-   
-   Estructura:
-   1. Variables y Reset
-   2. Layout Principal (Sidebar y Contenido)
-   3. Componentes de UI (Botones, Inputs, Chips)
-   4. Componentes Específicos (Uploader, KPIs, Selector de Vistas)
-   5. Tabla de Datos (Tabulator Overrides)
-   6. Modales (Edición Masiva, Listas y Reglas de Prioridad)
-   7. Utilidades y Responsive
-   8. Estilos Específicos para Reglas (v16.0)
+   style.css (Versión v4.1 - Rollback Híbrido)
+   ESTADO: ESTABLE (Altura fija recuperada para evitar congelamiento)
+   FUNCIONALIDAD: Soporte completo para Modales y Nuevas Funciones
    ============================================================================= */
 
 /* --- 1. VARIABLES Y RESET --- */
 :root {
-    /* Paleta Corporativa */
-    --color-azul: #004A99;
-    --color-azul-claro: rgba(0, 74, 153, 0.1);
-    --color-azul-hover: rgba(0, 74, 153, 0.2);
-    
-    --color-rojo: #E30613;
-    --color-rojo-claro: rgba(227, 6, 19, 0.1);
-    --color-rojo-hover: rgba(227, 6, 19, 0.2);
-    
-    --color-verde: #006400;
-    --color-verde-claro: rgba(0, 128, 0, 0.1);
-    --color-verde-hover: rgba(0, 128, 0, 0.2);
-
-    /* Neutros y Fondos */
-    --color-blanco: #FFFFFF;
-    --color-fondo-app: #F4F7F9;       /* Gris muy suave para el fondo general */
-    --color-fondo-sidebar: #FFFFFF;
-    --color-fondo-input: #F9FAFB;     /* Gris muy claro para inputs/headers */
-    
-    --color-texto-primario: #2E3A48;
-    --color-texto-secundario: #6B7789;
-    
-    --color-borde: #DEE2E6;
-    --color-borde-input: #CBD5E0;
-
-    /* Configuración UI */
-    --font-principal: Arial, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    --radio-esquinas: 12px;
-    --radio-inputs: 8px;
-    --sombra-ventana: 0 10px 30px rgba(0, 0, 0, 0.07);
-    --sombra-suave: 0 4px 12px rgba(0, 0, 0, 0.05);
+    --primary: #2563EB; --primary-hover: #1D4ED8; --primary-light: #EFF6FF;
+    --success: #059669; --success-light: #ECFDF5;
+    --danger: #DC2626; --danger-light: #FEF2F2;
+    --warning: #D97706; --warning-light: #FFFBEB;
+    --bg-body: #F3F4F6; --bg-surface: #FFFFFF; --bg-sidebar: #FFFFFF;
+    --text-main: #111827; --text-secondary: #6B7280; --text-placeholder: #9CA3AF;
+    --border: #E5E7EB; --border-focus: #bfdbfe;
+    --font-family: 'Inter', sans-serif;
+    --radius-sm: 6px; --radius-md: 8px; --radius-lg: 12px;
+    --shadow-sm: 0 1px 2px 0 rgba(0,0,0,0.05); 
+    --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.1); 
+    --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.1); 
+    --sidebar-width: 300px;
 }
 
 * { box-sizing: border-box; }
 
-body {
-    margin: 0;
-    font-family: var(--font-principal);
-    color: var(--color-texto-primario);
-    background-color: var(--color-fondo-app);
-    min-height: 100vh;
+/* VOLVEMOS A LA BASE ESTABLE: Permitimos scroll en el body */
+body { 
+    margin: 0; font-family: var(--font-family); color: var(--text-main); 
+    background-color: var(--bg-body); min-height: 100vh; font-size: 14px; line-height: 1.5; 
 }
 
-/* --- 2. LAYOUT PRINCIPAL --- */
-
-/* Barra Lateral Fija */
+/* --- 2. LAYOUT --- */
 .sidebar {
-    width: 320px;
-    background-color: var(--color-fondo-sidebar);
-    border-right: 1px solid var(--color-borde);
-    padding: 1.5rem;
-    height: 100vh;
-    overflow-y: auto;
-    position: fixed;
-    top: 0;
-    left: 0;
-    z-index: 10;
+    width: var(--sidebar-width); background-color: var(--bg-sidebar); border-right: 1px solid var(--border);
+    height: 100vh; position: fixed; top: 0; left: 0; z-index: 50; overflow-y: auto; padding: 1.5rem;
+    display: flex; flex-direction: column; box-shadow: var(--shadow-sm);
+}
+.sidebar h2 { font-size: 1.25rem; font-weight: 700; color: var(--text-main); margin: 0 0 1.5rem 0; }
+.sidebar h3 { font-size: 0.75rem; text-transform: uppercase; color: var(--text-secondary); font-weight: 600; margin: 1.5rem 0 0.75rem 0; }
+
+.content { 
+    margin-left: var(--sidebar-width); 
+    padding: 2rem; 
+    transition: margin-left 0.3s ease; 
+    max-width: 1800px; 
+    /* QUITAMOS el height: 100vh que causaba el conflicto */
+    min-height: 100vh; 
+    display: flex; 
+    flex-direction: column; 
 }
 
-.sidebar h2 {
-    font-size: 1.5rem;
-    margin: 0 0 1.5rem 0;
-    color: var(--color-azul);
-}
+.content-header-sutil { margin-bottom: 1.5rem; flex-shrink: 0; }
+.content-header-sutil h1 { font-size: 1.875rem; font-weight: 700; color: var(--text-main); margin: 0; }
+.content-header-sutil span { color: var(--text-secondary); font-size: 1rem; }
 
-.sidebar h3 {
-    font-size: 1.1rem;
-    color: var(--color-texto-primario);
-    margin-top: 1.5rem;
-    margin-bottom: 1rem;
-    padding-bottom: 0.5rem;
-    border-bottom: 1px solid var(--color-borde);
+/* --- 3. COMPONENTES FORMULARIO --- */
+input[type="text"], input[type="file"], select, textarea {
+    width: 100%; padding: 0.6rem; border: 1px solid var(--border); border-radius: var(--radius-md);
+    font-size: 0.9rem; font-family: var(--font-family); color: var(--text-main); background-color: var(--bg-surface);
 }
-.sidebar h3:first-of-type { margin-top: 0; }
+input:focus, select:focus, textarea:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--border-focus); }
 
-/* Área de Contenido Principal */
-.content {
-    padding: 2rem;
-    margin-left: 320px; /* Espacio para la sidebar */
-    transition: margin-left 0.3s ease;
+/* --- 4. BOTONES --- */
+button, .btn-small-link {
+    display: inline-flex; align-items: center; justify-content: center; padding: 0.6rem 1rem;
+    border-radius: var(--radius-md); font-weight: 500; font-size: 0.9rem; cursor: pointer;
+    border: 1px solid transparent; text-decoration: none; gap: 0.5rem; transition: all 0.2s;
 }
+.btn-azul-secundario, #btn-add-filter { background-color: var(--primary); color: white; border: 1px solid var(--primary); }
+.btn-azul-secundario:hover, #btn-add-filter:hover { background-color: var(--primary-hover); }
 
-.content-header-sutil {
-    margin-bottom: 1rem;
-}
+.btn-small-link { background-color: var(--bg-surface); color: var(--text-secondary); border: 1px solid var(--border); width: 100%; justify-content: flex-start; }
+.btn-small-link:hover { background-color: var(--bg-body); color: var(--text-main); border-color: #D1D5DB; }
+.btn-small-link i { width: 20px; text-align: center; }
 
-.content-header-sutil h1 {
-    margin: 0;
-    color: var(--color-texto-primario);
-}
+.column-toggle-buttons { display: flex; gap: 0.5rem; margin-bottom: 0.5rem; }
+.column-toggle-buttons .btn-small-link { width: auto; flex: 1; justify-content: center; }
 
-.content-header-sutil span {
-    color: var(--color-texto-secundario);
-    font-size: 1rem;
-}
+.btn-verde-secundario { background-color: var(--success-light); color: var(--success); }
+.btn-verde-secundario:hover { background-color: #D1FAE5; color: #047857; }
+.btn-rojo-secundario { background-color: var(--danger-light); color: var(--danger); }
+.btn-rojo-secundario:hover { background-color: #FEE2E2; color: #B91C1C; }
+
+/* --- 5. UPLOADER & KPI --- */
+.drag-drop-area { border: 2px dashed var(--border); border-radius: var(--radius-md); padding: 2rem 1rem; text-align: center; background-color: #FAFAFA; }
+.drag-drop-area:hover { border-color: var(--primary); background-color: var(--primary-light); }
+
+.resumen-busqueda { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1.5rem; margin-bottom: 1.5rem; flex-shrink: 0; }
+.resumen-card-item { background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1.5rem; display: flex; align-items: center; gap: 1rem; box-shadow: var(--shadow-sm); }
+.card-icon { width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; }
+.card-blue .card-icon { background: var(--primary-light); color: var(--primary); }
+.card-green .card-icon { background: var(--success-light); color: var(--success); }
+.card-purple .card-icon { background: #F3E8FF; color: #9333EA; }
+.card-data { display: flex; flex-direction: column; }
+.card-titulo { font-size: 0.85rem; color: var(--text-secondary); font-weight: 500; text-transform: uppercase; }
+.card-valor { font-size: 1.5rem; font-weight: 700; color: var(--text-main); }
+
+/* --- 6. TABLA Y VISTAS --- */
+.view-selector-container { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; padding: 0 0.25rem; flex-shrink: 0; }
+.view-selector-buttons { background-color: #E5E7EB; padding: 4px; border-radius: var(--radius-md); display: inline-flex; }
+.view-button { background: transparent; border: none; color: var(--text-secondary); padding: 0.5rem 1rem; border-radius: 4px; }
+.view-button.active { background-color: var(--bg-surface); color: var(--text-main); font-weight: 600; shadow: var(--shadow-sm); }
 
 .content-card {
-    background-color: var(--color-blanco);
-    border-radius: var(--radio-esquinas);
-    border: 1px solid var(--color-borde);
-    box-shadow: var(--sombra-suave);
-    padding: 1.5rem;
-    margin-bottom: 1.5rem;
-    margin-top: 1.5rem;
-    display: flex; 
-    flex-direction: column;
+    background-color: var(--bg-surface); border-radius: var(--radius-lg); border: 1px solid var(--border);
+    box-shadow: var(--shadow-sm); padding: 1.5rem; display: flex; flex-direction: column;
+    /* ELIMINAMOS flex-grow y overflow hidden aquí para evitar el loop */
+    min-height: 0; 
 }
 
-/* --- 3. COMPONENTES DE UI --- */
-
-/* Inputs y Selects Generales */
-.sidebar select,
-.sidebar input[type="text"] {
-    width: 100%;
-    padding: 0.75rem;
-    border: 1px solid var(--color-borde-input);
-    border-radius: var(--radio-inputs);
-    margin-bottom: 1rem;
-    font-size: 0.95rem;
-    background-color: var(--color-blanco);
-    transition: border-color 0.2s;
-}
-
-.sidebar select:focus,
-.sidebar input[type="text"]:focus {
-    outline: none;
-    border-color: var(--color-azul);
-}
-
-/* Botones Base */
-button, .btn-small-link {
-    padding: 0.75rem;
-    border: none;
-    border-radius: var(--radio-inputs);
-    font-weight: 600;
-    font-size: 0.9rem;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    white-space: nowrap;
-    text-align: center;
-    text-decoration: none;
-    display: inline-block;
-}
-
-/* Botones Específicos */
-#btn-add-filter, .btn-small-link {
-    width: 100%;
-    background-color: var(--color-blanco);
-    color: var(--color-texto-primario);
-    border: 1px solid var(--color-borde-input);
-}
-#btn-add-filter:hover, .btn-small-link:hover {
-    background-color: var(--color-fondo-input);
-    border-color: #A0AEC0;
-}
-
-/* Botones de Acción (Verde/Azul/Rojo Sutiles) */
-.btn-verde-secundario {
-    background-color: var(--color-verde-claro);
-    color: var(--color-verde);
-    padding: 0.65rem 1rem;
-}
-.btn-verde-secundario:hover { background-color: var(--color-verde-hover); }
-
-.btn-azul-secundario {
-    background-color: var(--color-azul-claro);
-    color: var(--color-azul);
-    padding: 0.65rem 1rem;
-}
-.btn-azul-secundario:hover { background-color: var(--color-azul-hover); }
-
-.btn-rojo-secundario {
-    background-color: var(--color-rojo-claro);
-    color: var(--color-rojo);
-    padding: 0.65rem 1rem;
-}
-.btn-rojo-secundario:hover { background-color: var(--color-rojo-hover); }
-
-/* Botones Icono (Tabla) */
-.icon-button {
-    background-color: var(--color-blanco);
-    color: var(--color-texto-secundario);
-    border: 1px solid var(--color-borde-input);
-    width: 32px;
-    height: 32px;
-    padding: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-.icon-button svg { width: 18px; height: 18px; }
-.icon-button:hover {
-    background-color: var(--color-fondo-input);
-    color: var(--color-azul);
-    border-color: var(--color-azul);
-}
-
-/* Chips de Filtros */
-.filtro-chip {
-    display: inline-flex;
-    align-items: center;
-    background-color: var(--color-rojo-claro);
-    color: var(--color-rojo);
-    border-radius: 16px;
-    padding: 0.35rem 0.5rem 0.35rem 0.75rem;
-    font-size: 0.9rem;
-}
-.filtro-chip .remove-filter-btn {
-    background: none;
-    border: none;
-    color: var(--color-rojo);
-    margin-left: 0.35rem;
-    font-size: 1.3rem;
-    padding: 0;
-    opacity: 0.7;
-}
-.filtro-chip .remove-filter-btn:hover { opacity: 1; }
-
-/* --- 4. COMPONENTES ESPECÍFICOS --- */
-
-/* Selector de Idioma */
-.lang-selector {
-    display: flex;
-    width: 100%;
-    background-color: var(--color-fondo-app);
-    border-radius: var(--radio-inputs);
-    padding: 4px;
-    margin-bottom: 1.5rem;
-}
-.lang-button {
-    width: 50%;
-    padding: 0.5rem;
-    border: none;
-    background-color: transparent;
-    color: var(--color-texto-secundario);
-    border-radius: 6px;
-}
-.lang-button.active {
-    background-color: var(--color-blanco);
-    color: var(--color-azul);
-    box-shadow: var(--sombra-suave);
-}
-
-/* Uploader Drag & Drop */
-.drag-drop-area {
-    border: 2px dashed var(--color-borde);
-    border-radius: var(--radio-inputs);
-    padding: 1.5rem;
-    text-align: center;
-    background-color: var(--color-fondo-input);
-    cursor: pointer;
-    transition: background-color 0.2s ease;
-}
-.drag-drop-area:hover, .drag-drop-area.dragging {
-    background-color: #EBF5FF;
-    border-color: var(--color-azul);
-}
-.drag-drop-area p {
-    font-weight: 600;
-    margin: 0 0 0.25rem 0;
-    font-size: 0.95rem;
-}
-.drag-drop-area span {
-    font-size: 0.85rem;
-    color: var(--color-texto-secundario);
-    display: block;
-    margin-bottom: 1rem;
-}
-
-/* Lista de Archivos Subidos */
-.file-list-item {
-    display: flex;
-    align-items: center;
-    border: 1px solid var(--color-borde);
-    border-radius: var(--radio-inputs);
-    padding: 0.75rem;
-    margin-top: 1rem;
-    background-color: var(--color-blanco);
-}
-.file-list-item .file-icon {
-    width: 24px;
-    height: 24px;
-    margin-right: 0.75rem;
-    color: var(--color-azul);
-}
-.file-list-item .file-name {
-    display: block;
-    font-weight: 600;
-    font-size: 0.9rem;
-}
-
-/* Selector de Columnas (Sidebar) */
-#column-selector-wrapper {
-    max-height: 250px;
-    overflow-y: auto;
-    border: 1px solid var(--color-borde);
-    border-radius: var(--radio-inputs);
-    padding: 1rem;
-    background-color: var(--color-fondo-app);
-}
-.column-toggle-buttons {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-    margin-bottom: 0.75rem;
-}
-.column-selector-item { margin-bottom: 0.5rem; }
-.column-selector-item label {
-    display: flex;
-    align-items: center;
-    cursor: pointer;
-    font-size: 0.95rem;
-}
-.column-selector-item input {
-    margin-right: 0.75rem;
-    width: 1.15em;
-    height: 1.15em;
-}
-
-/* Tarjetas de KPIs */
-.resumen-busqueda {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 1.5rem;
-}
-.resumen-card-item {
-    border: 1px solid var(--color-borde);
-    border-radius: var(--radio-inputs);
-    padding: 1.25rem;
-    background-color: var(--color-fondo-app);
-}
-.resumen-card-item .card-titulo {
-    display: block;
-    font-size: 0.9rem;
-    font-weight: 600;
-    color: var(--color-texto-secundario);
-    margin-bottom: 0.5rem;
-}
-.resumen-card-item .card-valor {
-    display: block;
-    font-size: 1.75rem;
-    font-weight: 600;
-}
-
-/* Selector de Vistas (Detallada/Agrupada) */
-.view-selector-container {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 1.5rem;
-    margin-top: 1.5rem;
-    margin-bottom: -0.5rem;
-    padding-left: 0.5rem;
-}
-.view-selector-buttons {
-    display: flex;
-    background-color: var(--color-fondo-app);
-    border-radius: var(--radio-inputs);
-    padding: 4px;
-    border: 1px solid var(--color-borde);
-}
-.view-button {
-    padding: 0.5rem 1rem;
-    border: none;
-    background-color: transparent;
-    color: var(--color-texto-secundario);
-    border-radius: 6px;
-}
-.view-button.active {
-    background-color: var(--color-blanco);
-    color: var(--color-azul);
-    box-shadow: var(--sombra-suave);
-}
-.group-by-wrapper select {
-    padding: 0.75rem;
-    border: 1px solid var(--color-borde-input);
-    border-radius: var(--radio-inputs);
-    min-width: 250px;
-}
-
-/* Controles de la Tabla (Search, Actions) */
 .table-controls {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: space-between;
-    align-items: center;
-    gap: 1rem;
-    margin-bottom: 1.5rem;
+    background-color: var(--bg-body); padding: 0.75rem; border-radius: var(--radius-md);
+    display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; margin-bottom: 1rem; border: 1px solid var(--border); flex-shrink: 0;
 }
-.search-wrapper { position: relative; }
-.search-wrapper .search-icon {
-    position: absolute;
-    left: 12px;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 20px;
-    height: 20px;
-    color: var(--color-texto-secundario);
-}
-#input-search-table {
-    padding: 0.75rem 0.75rem 0.75rem 2.75rem;
-    border: 1px solid var(--color-borde-input);
-    border-radius: var(--radio-inputs);
-    font-size: 0.95rem;
-    width: 300px;
-}
-.table-actions {
-    position: absolute;
-    top: 10px;
-    right: 10px;
-    z-index: 10;
-    display: flex;
-    gap: 0.5rem;
-}
+.filtro-chip { background: var(--bg-surface); border: 1px solid var(--border); border-radius: 20px; padding: 0.3rem 0.8rem; font-size: 0.85rem; display: inline-flex; align-items: center; }
+.remove-filter-btn { margin-left: 6px; border: none; background: none; cursor: pointer; color: var(--text-placeholder); font-size: 1.1rem; }
 
-/* --- 5. TABLA DE DATOS (TABULATOR) --- */
+.search-wrapper { margin-left: auto; position: relative; }
+.search-wrapper input { padding-left: 2.25rem; border-radius: 20px; width: 250px; }
+.search-wrapper .search-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-placeholder); width: 16px; }
 
+/* TABULATOR (Estructura ESTABLE) */
 .table-container-flotante {
-    position: relative;
-    flex-grow: 1;
+    border: 1px solid var(--border); border-radius: var(--radius-md);
+    background-color: var(--bg-surface);
+    width: 100%; 
+    /* CRÍTICO: Altura fija para evitar el congelamiento */
+    height: 65vh; 
+    overflow: hidden;
+}
+
+/* TABULATOR (Estilos Override) */
+.tabulator-header { background-color: #F9FAFB !important; border-bottom: 1px solid var(--border) !important; font-weight: 600; color: var(--text-secondary); }
+.tabulator-row { border-bottom: 1px solid #F3F4F6 !important; background-color: var(--bg-surface) !important; }
+.tabulator-row:hover { background-color: #F9FAFB !important; }
+.tabulator-row.tabulator-selected { background-color: #EFF6FF !important; }
+.tabulator-cell { border-right: none !important; color: var(--text-main); padding: 10px !important; }
+
+/* Prioridades */
+.tabulator-row.priority-alta { border-left: 4px solid var(--danger) !important; background-color: #FFF5F5 !important; }
+.tabulator-row.priority-media { border-left: 4px solid var(--warning) !important; }
+.tabulator-row.priority-baja { border-left: 4px solid var(--success) !important; }
+
+.icon-button { width: 32px; height: 32px; padding: 0; border-radius: var(--radius-sm); border: 1px solid var(--border); color: var(--text-secondary); background: var(--bg-surface); }
+.icon-button:hover { background: var(--bg-body); color: var(--primary); border-color: var(--primary); }
+
+/* --- 7. MODALES (CRÍTICO: ESTOS ESTILOS SON NECESARIOS PARA LAS FUNCIONES) --- */
+#modal-overlay { 
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background-color: rgba(17, 24, 39, 0.6); backdrop-filter: blur(4px);
+    z-index: 10000; display: none; align-items: center; justify-content: center;
+}
+#modal-overlay[style*="display: flex"] { display: flex !important; }
+
+#bulk-edit-modal, #manage-lists-modal, #priority-rules-modal, #find-replace-modal {
+    background-color: var(--bg-surface); border: 1px solid var(--border); 
+    box-shadow: var(--shadow-lg); border-radius: var(--radius-lg); 
+    overflow: hidden; max-height: 90vh; display: flex; flex-direction: column;
+    min-width: 400px; max-width: 600px;
+}
+
+#bulk-edit-modal h3, #manage-lists-modal h3, #priority-rules-modal h3, #find-replace-modal h3 {
+    background-color: #F9FAFB; padding: 1rem 1.5rem; margin: 0; border-bottom: 1px solid var(--border); font-size: 1.1rem; color: var(--text-main);
+}
+
+.modal-buttons { padding: 1rem 1.5rem; background-color: #F9FAFB; border-top: 1px solid var(--border); margin: 0; text-align: right; display: flex; justify-content: flex-end; gap: 1rem; }
+
+.modal-form-group { margin-bottom: 1rem; padding: 0 1.5rem; }
+.modal-form-group:first-of-type { margin-top: 1.5rem; }
+.modal-form-group label { display: block; margin-bottom: 0.5rem; font-weight: 500; color: var(--text-main); font-size: 0.9rem; }
+
+/* Grid para Buscar y Reemplazar */
+.modal-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; padding: 0 1.5rem; margin-bottom: 1rem; }
+.modal-grid-2 .modal-form-group { padding: 0; margin: 0; }
+
+.input-help-text { display: block; font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.5rem; line-height: 1.4; }
+
+.values-display-box { 
+    background: #f9fafb; border: 1px solid var(--border); border-radius: var(--radius-md); 
+    padding: 0.5rem; min-height: 60px; max-height: 150px; overflow-y: auto; font-size: 0.85rem; color: var(--text-secondary);
+}
+
+.rule-item { 
+    display: flex; justify-content: space-between; align-items: center; 
+    background: white; border: 1px solid var(--border); padding: 0.5rem 0.8rem; 
+    margin-bottom: 0.5rem; border-radius: var(--radius-sm); 
+}
+.rule-item:last-child { margin-bottom: 0; }
+.btn-delete-rule {
+    background: transparent; border: none; color: var(--text-placeholder); cursor: pointer; font-size: 1.1rem; padding: 4px; transition: color 0.2s;
+}
+.btn-delete-rule:hover { color: var(--danger); }
+
+/* --- 8. RESPONSIVE --- */
+@media (max-width: 1024px) { .sidebar { width: 260px; } .content { margin-left: 260px; } }
+@media (max-width: 768px) { .sidebar { display: none; } .content { margin-left: 0; padding: 1rem; } }
+
+/* --- 9. FULLSCREEN MODE (Estable + Botones) --- */
+
+/* 1. Ocultar Sidebar */
+body.fullscreen-mode .sidebar {
+    display: none !important;
+}
+
+/* 2. Contenido: Ancho total y SCROLL NATURAL (La clave de la estabilidad) */
+body.fullscreen-mode .content {
+    margin-left: 0 !important;
+    padding: 1rem !important;
+    width: 100vw !important;
+    max-width: none !important;
+    
+    /* Dejamos que la página crezca lo que necesite. Cero cálculos complejos. */
+    position: static !important;
+    height: auto !important;
+    min-height: 100vh;
+    z-index: auto;
+    overflow: visible !important; 
+}
+
+/* 3. Tarjeta: Limpia y flexible */
+.content-card.in-fullscreen {
+    border: none !important;
+    box-shadow: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    height: auto !important; 
     min-height: 0;
-    height: 65vh; /* Altura base */
 }
 
-#results-table {
-    border: 1px solid var(--color-borde);
-    border-radius: var(--radio-esquinas);
-    box-shadow: var(--sombra-ventana);
-    background-color: var(--color-blanco);
-}
+/* 4. ELEMENTOS VISIBLES / OCULTOS */
 
-/* Colores de Prioridad (Aplicados a la fila completa) */
-#results-table div.tabulator-row.priority-alta .tabulator-cell { background-color: #ffcdd2 !important; }
-#results-table div.tabulator-row.priority-media .tabulator-cell { background-color: #ffe0b2 !important; }
-#results-table div.tabulator-row.priority-baja .tabulator-cell { background-color: #fff9c4 !important; }
-
-/* Resaltado de Edición */
-#results-table div.tabulator-row.tabulator-editing .tabulator-cell { background-color: #FFF9E5 !important; }
-
-/* Hover sobre filas de prioridad (oscurecer ligeramente) */
-#results-table div.tabulator-row.priority-alta:hover .tabulator-cell,
-#results-table div.tabulator-row.priority-media:hover .tabulator-cell,
-#results-table div.tabulator-row.priority-baja:hover .tabulator-cell {
-    background-color: inherit !important; 
-    filter: brightness(98%);
-}
-
-/* Icono de Eliminar en celda */
-.delete-icon {
-    color: #A0AEC0;
-    cursor: pointer;
-    transition: color 0.2s;
-}
-.tabulator-cell:hover .delete-icon { color: var(--color-rojo); }
-
-/* Celda Sticky para N° Fila */
-.tabulator-cell[tabulator-field="_row_id"] {
-    background-color: var(--color-fondo-input);
-    font-weight: bold;
-    color: var(--color-texto-secundario);
-    border-right: 1px solid var(--color-borde);
-}
-
-/* --- 6. MODALES (EDICIÓN, LISTAS, REGLAS) --- */
-
-#modal-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.5);
-    z-index: 1000;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    backdrop-filter: blur(2px);
-}
-
-#bulk-edit-modal,
-#manage-lists-modal,
-#priority-rules-modal {
-    background-color: var(--color-blanco);
-    padding: 2rem;
-    border-radius: var(--radio-esquinas);
-    box-shadow: var(--sombra-ventana);
-    width: 450px;
-    max-width: 90%;
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-    border: 1px solid var(--color-borde);
-    max-height: 90vh; /* Evitar que se salga en pantallas pequeñas */
-    overflow-y: auto;
-}
-
-#bulk-edit-modal h3,
-#manage-lists-modal h3,
-#priority-rules-modal h3 {
-    margin-top: 0;
-    color: var(--color-azul);
-    font-size: 1.25rem;
-    border-bottom: 1px solid var(--color-borde);
-    padding-bottom: 0.5rem;
-}
-
-.modal-form-group {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-}
-
-.modal-form-group label {
-    font-weight: 600;
-    font-size: 0.9rem;
-    color: var(--color-texto-primario);
-}
-
-.modal-form-group select,
-.modal-form-group input,
-.modal-form-group textarea {
-    padding: 0.75rem;
-    border: 1px solid var(--color-borde-input);
-    border-radius: var(--radio-inputs);
-    width: 100%;
-    font-family: var(--font-principal);
-}
-
-.modal-form-group textarea:focus,
-.modal-form-group input:focus,
-.modal-form-group select:focus {
-    outline: none;
-    border-color: var(--color-azul);
-}
-
-.input-help-text {
-    font-size: 0.8rem;
-    color: var(--color-texto-secundario);
-}
-
-/* Caja de visualización de valores (Listas y Reglas) */
-.values-display-box {
-    background-color: var(--color-fondo-input);
-    border: 1px solid var(--color-borde);
-    border-radius: var(--radio-inputs);
-    padding: 0.75rem;
-    font-size: 0.85rem;
-    color: var(--color-texto-secundario);
-    max-height: 150px;
-    overflow-y: auto;
-    line-height: 1.5;
-}
-
-.modal-buttons {
-    display: flex;
-    justify-content: flex-end;
-    gap: 1rem;
-    margin-top: 1rem;
-}
-
-/* --- 7. UTILIDADES Y RESPONSIVE --- */
-
-/* Modo Pantalla Completa */
-body.fullscreen-mode .sidebar { margin-left: -320px; }
-body.fullscreen-mode .content { margin-left: 0; padding: 0; }
+/* Ocultamos lo que estorba */
 body.fullscreen-mode .content-header-sutil,
 body.fullscreen-mode .resumen-busqueda,
-body.fullscreen-mode .content-card .card-header,
-body.fullscreen-mode .content-card .table-controls { display: none; }
-
-body.fullscreen-mode .content-card {
-    margin: 0;
-    border: none;
-    border-radius: 0;
-    height: 100vh;
-    width: 100%;
-}
-body.fullscreen-mode .table-container-flotante { height: 100%; }
-body.fullscreen-mode .table-actions { top: 15px; right: 15px; }
-
-/* Adaptación Móvil */
-@media (max-width: 900px) {
-    .resumen-busqueda { grid-template-columns: 1fr; }
+body.fullscreen-mode .content-card .card-header {
+   display: none !important; 
 }
 
-/* --- 8. ESTILOS ESPECÍFICOS: REGLAS DE PRIORIDAD (v16.0) --- */
-
-/* Items de la lista de reglas (Generados por JS) */
-.rule-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 0.5rem;
-    border-bottom: 1px solid var(--color-borde);
-    background-color: var(--color-blanco);
-    font-size: 0.9rem;
+/* MOSTRAR: Botones de Vista (Lo que pediste) */
+body.fullscreen-mode .view-selector-container {
+    display: flex !important;
+    justify-content: center;
+    margin-top: 0 !important;
+    margin-bottom: 1rem !important;
+    padding-left: 0 !important;
 }
 
-.rule-item:last-child {
-    border-bottom: none;
+/* MOSTRAR: Controles de Tabla */
+body.fullscreen-mode .content-card .table-controls {
+    display: flex !important;
 }
 
-.rule-item strong {
-    color: var(--color-azul);
-}
-
-/* Botón de borrar regla (Papelera) */
-.rule-item .btn-delete-rule {
-    background: none;
-    border: none;
-    color: var(--color-texto-secundario);
-    cursor: pointer;
-    font-size: 1.1rem;
-    padding: 0 0.5rem;
-    transition: color 0.2s;
-}
-
-.rule-item .btn-delete-rule:hover {
-    color: var(--color-rojo);
-}
-
-/* Tooltip de Tabulator (Estilo por defecto si no está definido) */
-.tabulator-tooltip {
-    background-color: #333;
-    color: #fff;
-    border-radius: 4px;
-    padding: 4px 8px;
-    font-size: 12px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-    max-width: 300px;
-    z-index: 10000;
+/* 5. ALTURA DE TABLA */
+/* Usamos una altura fija alta (85% de la ventana). 
+   Si los botones empujan la tabla hacia abajo, el usuario simplemente hace scroll.
+   Esto evita el congelamiento porque es un valor fijo, no relativo. */
+body.fullscreen-mode .table-container-flotante {
+    height: 85vh !important; 
 }

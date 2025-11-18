@@ -1,84 +1,79 @@
-# modules/filters.py (Versión 2 - Con Lógica OR para la misma columna)
+# modules/filters.py (Versión 3.0 - Documentado y Optimizado)
 
 import pandas as pd
-from collections import defaultdict # Para agrupar filtros por columna
+from collections import defaultdict
 
 def aplicar_filtros_dinamicos(df: pd.DataFrame, filtros: list) -> pd.DataFrame:
     """
-    Aplica una lista de filtros al DataFrame.
-    - Filtros en DIFERENTES columnas se aplican con lógica AND.
-    - Filtros en la MISMA columna se aplican con lógica OR.
+    Aplica filtros dinámicos al DataFrame con lógica mixta (AND/OR).
 
-    Cada filtro es un diccionario: {'columna': 'NombreCol', 'valor': 'ValorBuscar'}
+    Lógica:
+    - Filtros en columnas DIFERENTES: Lógica AND (Intersección).
+    - Filtros en la MISMA columna: Lógica OR (Unión).
+
+    Optimización v18.0:
+    - Uso de vectorización para comparaciones de strings.
+    - Manejo robusto de tipos de datos antes de la búsqueda.
 
     Args:
-        df (pd.DataFrame): El DataFrame original.
-        filtros (list): Una lista de diccionarios de filtros.
+        df (pd.DataFrame): DataFrame original.
+        filtros (list): Lista de dicts {'columna': str, 'valor': str}.
 
     Returns:
-        pd.DataFrame: El DataFrame filtrado.
+        pd.DataFrame: Subconjunto filtrado del DataFrame.
     """
     
-    if not filtros: # Si no hay filtros, devuelve todo
+    if not filtros:
         return df.copy()
 
-    # --- NUEVA LÓGICA: Agrupar filtros por columna ---
+    # 1. Agrupar filtros por columna.
     filtros_agrupados = defaultdict(list)
     for f in filtros:
-        # Solo consideramos filtros válidos
         if f.get('columna') and f.get('valor'):
              filtros_agrupados[f['columna']].append(f['valor'])
-    # Ejemplo: filtros_agrupados = {'Invoice #': ['229', '996'], 'Status': ['Pending']}
-    # ---
 
-    # Empezamos con una copia del DataFrame completo
     resultado = df.copy()
 
-    # --- Lógica AND entre columnas diferentes ---
+    # 2. Iterar sobre cada columna (Lógica AND entre columnas).
     for columna, valores in filtros_agrupados.items():
-        if not valores: # Si no hay valores para esta columna, saltar
+        if not valores:
             continue
             
         try:
-            # --- ¡LÓGICA MEJORADA PARA N° DE FILA! (Tu Punto 3) ---
+            # Caso Especial: Filtro por ID de fila.
             if columna == '_row_id':
-                # El usuario busca por el N° Fila (ej. 144)
-                # El _row_id es 0-indexed (ej. 143)
-                # Convertimos los valores buscados a los IDs correctos (int)
                 ids_a_buscar = []
                 for v in valores:
                     try:
-                        # Convierte el valor (ej "144") a int (144) y resta 1
+                        # El usuario ve IDs base-1, el sistema usa base-0.
                         ids_a_buscar.append(int(v) - 1)
                     except ValueError:
-                        pass # Ignora si el usuario escribe "abc"
+                        pass
                 
-                if not ids_a_buscar:
-                    continue # Pasa al siguiente filtro si no hay IDs válidos
-                
-                # Busca coincidencias EXACTAS usando .isin()
-                mascara_or_columna = resultado[columna].isin(ids_a_buscar)
+                if ids_a_buscar:
+                    # .isin es altamente eficiente.
+                    resultado = resultado[resultado[columna].isin(ids_a_buscar)]
 
-            else:
-                # --- Lógica normal (como antes) para otras columnas ---
-                # Aseguramos que la columna sea texto para la búsqueda
+            # Caso General: Filtro de texto parcial.
+            elif columna in resultado.columns:
+                # Normalizamos la columna a string y minúsculas de una vez.
                 columna_texto = resultado[columna].astype(str).str.lower()
                 
+                # Creamos una máscara inicial de Falsos.
                 mascara_or_columna = pd.Series([False] * len(resultado), index=resultado.index)
                 
+                # Acumulamos condiciones con OR (|).
                 for valor in valores:
                     valor_lower = str(valor).lower()
-                    mascara_or_columna = mascara_or_columna | columna_texto.str.contains(valor_lower, case=False, na=False)
+                    # Usamos contains para búsqueda parcial. na=False maneja nulos.
+                    mascara_or_columna |= columna_texto.str.contains(valor_lower, case=False, regex=False, na=False)
             
-            # Aplica la máscara (AND con los filtros anteriores)
-            resultado = resultado[mascara_or_columna]
-            # --- FIN DE LA LÓGICA MEJORADA ---
+                # Aplicamos la máscara acumulada.
+                resultado = resultado[mascara_or_columna]
 
-        except KeyError:
-             print(f"Advertencia: La columna '{columna}' especificada en un filtro no existe en el archivo.")
-             pass # Si la columna no existe, simplemente ignoramos ese filtro
         except Exception as e:
-            print(f"Error inesperado al aplicar filtro en '{columna}': {e}")
+            print(f"Advertencia al filtrar columna '{columna}': {e}")
+            # En caso de error, no filtramos esta columna para no romper el flujo.
             pass
 
     return resultado

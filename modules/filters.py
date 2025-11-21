@@ -1,82 +1,79 @@
-# modules/filters.py (Versión 4.0 - Operadores Numéricos)
+# modules/filters.py (Versión 3.0 - Documentado y Optimizado)
 
 import pandas as pd
 from collections import defaultdict
 
-def _clean_currency(series):
-    """Convierte serie de texto con $ y , a flotantes para poder comparar."""
-    # Elimina $ y , y convierte a número. Los errores se vuelven NaN.
-    return pd.to_numeric(series.astype(str).str.replace(r'[$,]', '', regex=True), errors='coerce')
-
 def aplicar_filtros_dinamicos(df: pd.DataFrame, filtros: list) -> pd.DataFrame:
     """
-    Aplica filtros con operadores avanzados (>, <, =, contains).
+    Aplica filtros dinámicos al DataFrame con lógica mixta (AND/OR).
+
+    Lógica:
+    - Filtros en columnas DIFERENTES: Lógica AND (Intersección).
+    - Filtros en la MISMA columna: Lógica OR (Unión).
+
+    Optimización v18.0:
+    - Uso de vectorización para comparaciones de strings.
+    - Manejo robusto de tipos de datos antes de la búsqueda.
+
+    Args:
+        df (pd.DataFrame): DataFrame original.
+        filtros (list): Lista de dicts {'columna': str, 'valor': str}.
+
+    Returns:
+        pd.DataFrame: Subconjunto filtrado del DataFrame.
     """
+    
     if not filtros:
         return df.copy()
 
-    # 1. Agrupar filtros por columna
-    # Ahora guardamos el objeto filtro COMPLETO (con operador), no solo el valor.
+    # 1. Agrupar filtros por columna.
     filtros_agrupados = defaultdict(list)
     for f in filtros:
-        if f.get('columna') and 'valor' in f:
-             filtros_agrupados[f['columna']].append(f)
+        if f.get('columna') and f.get('valor'):
+             filtros_agrupados[f['columna']].append(f['valor'])
 
     resultado = df.copy()
 
-    # 2. Iterar sobre cada columna (AND entre columnas)
-    for columna, lista_filtros in filtros_agrupados.items():
-        if not lista_filtros or columna not in resultado.columns:
+    # 2. Iterar sobre cada columna (Lógica AND entre columnas).
+    for columna, valores in filtros_agrupados.items():
+        if not valores:
             continue
             
         try:
-            # Máscara inicial (Falso) para lógica OR acumulativa
-            mascara_columna = pd.Series([False] * len(resultado), index=resultado.index)
-            
-            col_data = resultado[columna]
-            
-            # Detectar si necesitamos conversión numérica
-            # Si alguno de los filtros usa >, <, >=, <=
-            es_numerico = any(f.get('operador') in ['greater', 'less', 'greater_eq', 'less_eq'] for f in lista_filtros)
-            
-            col_data_num = None
-            if es_numerico:
-                col_data_num = _clean_currency(col_data)
-            
-            for filtro in lista_filtros:
-                val = filtro.get('valor')
-                op = filtro.get('operador', 'contains') # Default a 'contains' si no viene
-                
-                # --- Operadores de Texto ---
-                if op == 'contains':
-                    mascara_columna |= col_data.astype(str).str.contains(str(val), case=False, regex=False, na=False)
-                
-                elif op == 'equals':
-                    mascara_columna |= (col_data.astype(str).str.lower() == str(val).lower())
-                
-                elif op == 'not_equals':
-                    mascara_columna |= (col_data.astype(str).str.lower() != str(val).lower())
-
-                # --- Operadores Numéricos ---
-                elif es_numerico and col_data_num is not None:
+            # Caso Especial: Filtro por ID de fila.
+            if columna == '_row_id':
+                ids_a_buscar = []
+                for v in valores:
                     try:
-                        # Limpiamos el valor input del usuario (por si puso "$5,000")
-                        val_clean = str(val).replace(',', '').replace('$', '')
-                        val_num = float(val_clean)
-                        
-                        if op == 'greater': mascara_columna |= (col_data_num > val_num)
-                        elif op == 'less': mascara_columna |= (col_data_num < val_num)
-                        elif op == 'greater_eq': mascara_columna |= (col_data_num >= val_num)
-                        elif op == 'less_eq': mascara_columna |= (col_data_num <= val_num)
+                        # El usuario ve IDs base-1, el sistema usa base-0.
+                        ids_a_buscar.append(int(v) - 1)
                     except ValueError:
-                        # Si el usuario escribió texto en un filtro numérico, lo ignoramos
                         pass
+                
+                if ids_a_buscar:
+                    # .isin es altamente eficiente.
+                    resultado = resultado[resultado[columna].isin(ids_a_buscar)]
 
-            # Aplicar la máscara de esta columna al resultado
-            resultado = resultado[mascara_columna]
+            # Caso General: Filtro de texto parcial.
+            elif columna in resultado.columns:
+                # Normalizamos la columna a string y minúsculas de una vez.
+                columna_texto = resultado[columna].astype(str).str.lower()
+                
+                # Creamos una máscara inicial de Falsos.
+                mascara_or_columna = pd.Series([False] * len(resultado), index=resultado.index)
+                
+                # Acumulamos condiciones con OR (|).
+                for valor in valores:
+                    valor_lower = str(valor).lower()
+                    # Usamos contains para búsqueda parcial. na=False maneja nulos.
+                    mascara_or_columna |= columna_texto.str.contains(valor_lower, case=False, regex=False, na=False)
+            
+                # Aplicamos la máscara acumulada.
+                resultado = resultado[mascara_or_columna]
 
         except Exception as e:
-            print(f"Advertencia filtrando columna '{columna}': {e}")
+            print(f"Advertencia al filtrar columna '{columna}': {e}")
+            # En caso de error, no filtramos esta columna para no romper el flujo.
             pass
 
     return resultado

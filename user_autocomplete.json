@@ -24,6 +24,17 @@
         "Invoice",
         "PROFORMA"
     ],
+    "Operating Unit": [
+        "300000007338056",
+        "300000007338082",
+        "300000007338095",
+        "300000007338108",
+        "300000007338134",
+        "300000007338147",
+        "300000007338160",
+        "300000007338186",
+        "300000073870298"
+    ],
     "Operating Unit Name": [
         "CABBKI",
         "CACBC",
@@ -1328,8 +1339,16 @@
         "zulemprecisionwelding.powder@gmail.com"
     ],
     "Status": [
-        "AP Advanced Tasks",
-        "AP Initial Review"
+        "AP Initial Review",
+        "AP Post Routing",
+        "AP Rejection",
+        "Fully Paid",
+        "Imported to ERP",
+        "Imported to ERP Failure",
+        "Imported to OIT",
+        "Requester Approval",
+        "Routed",
+        "Terminated"
     ],
     "Vendor Name": [
         "1001204331 ONTARIO INC",
@@ -2179,6 +2198,7 @@
         "POLAR SNOW EQUIPMENT",
         "POP A LOCK OF TEXAS",
         "PORT ROYAL MILLS LTD",
+        "PPC PROTOTYPE PACKAGING LLC",
         "PPC PROTOTYPE PACKAGING LLC ",
         "PRAIRIE FLOUR MILLS LTD",
         "PRECISE CLEANERS",
@@ -2553,6 +2573,7 @@
         "ZORO",
         "ZULEM PRECISION WELDING"
     ],
+    "Vendor Type": [],
     "WEC Email Inbox": [
         "CBacctspayable@grupobimbo.com",
         "bhc_ap@grupobimbo.com"

@@ -6,6 +6,13 @@
             "priority": "Alta",
             "reason": "Proveedores importantes asignados",
             "active": false
+        },
+        {
+            "column": "Assignee",
+            "value": "alvaro.moncada@grupobimbo.com",
+            "priority": "Alta",
+            "reason": "Asignados importantes proveedores",
+            "active": true
         }
     ],
     "settings": {

@@ -72,10 +72,8 @@ LANGUAGES = {
         
         # --- (INICIO - NUEVAS LÍNEAS v17.4.1) ---
         "btn_bulk_edit": "Editar",
-        "btn_undo": "Deshacer",
+        "btn_undo": "Deshacer"
         # --- (FIN - NUEVAS LÍNEAS v17.4.1) ---
-
-        # (Opcional: Traducción de operadores si decides mostrarlos traducidos en el chip)
     },
     "en": {
         "title": "Dynamic Invoice Search",
@@ -145,7 +143,6 @@ LANGUAGES = {
         "btn_bulk_edit": "Edit",
         "btn_undo": "Undo"
         # --- (FIN - NUEVAS LÍNEAS v17.4.1) ---
-
     }
 }
 

@@ -1,41 +1,99 @@
-/* =============================================================================
-   style.css (Versión 5.0 - Final con Login)
-   ESTADO: ESTABLE (Layout corregido + Estilos de Login añadidos)
-   ============================================================================= */
+/* ==========================================================================
+   style.css - Hoja de Estilos Principal
+   PROYECTO: Buscador de Facturas Dinámico
+   VERSIÓN: 5.0 (Reorganizado y Optimizado)
+   ESTRUCTURA:
+    1. Variables & Reset
+    2. Layout Principal (Sidebar/Content)
+    3. Componentes UI (Botones, Inputs, Cards)
+    4. Módulos Específicos (Uploader, Tabulator, Filtros)
+    5. Modales (Ventanas emergentes)
+    6. Estados (Fullscreen, Utilería)
+    7. Responsive
+   ========================================================================== */
 
-/* --- 1. VARIABLES Y RESET --- */
+/* --------------------------------------------------------------------------
+   1. VARIABLES & RESET
+   -------------------------------------------------------------------------- */
 :root {
-    --primary: #2563EB; --primary-hover: #1D4ED8; --primary-light: #EFF6FF;
-    --success: #059669; --success-light: #ECFDF5;
-    --danger: #DC2626; --danger-light: #FEF2F2;
-    --warning: #D97706; --warning-light: #FFFBEB;
-    --bg-body: #F3F4F6; --bg-surface: #FFFFFF; --bg-sidebar: #FFFFFF;
-    --text-main: #111827; --text-secondary: #6B7280; --text-placeholder: #9CA3AF;
-    --border: #E5E7EB; --border-focus: #bfdbfe;
-    --font-family: 'Inter', sans-serif;
-    --radius-sm: 6px; --radius-md: 8px; --radius-lg: 12px;
+    /* Paleta de Colores */
+    --primary: #2563EB; 
+    --primary-hover: #1D4ED8; 
+    --primary-light: #EFF6FF;
+    
+    --success: #059669; 
+    --success-light: #ECFDF5;
+    
+    --danger: #DC2626; 
+    --danger-light: #FEF2F2;
+    
+    --warning: #D97706; 
+    --warning-light: #FFFBEB;
+    
+    /* Fondos y Textos */
+    --bg-body: #F3F4F6; 
+    --bg-surface: #FFFFFF; 
+    --bg-sidebar: #FFFFFF;
+    --text-main: #111827; 
+    --text-secondary: #6B7280; 
+    --text-placeholder: #9CA3AF;
+    
+    /* Bordes y Sombras */
+    --border: #E5E7EB; 
+    --border-focus: #bfdbfe;
     --shadow-sm: 0 1px 2px 0 rgba(0,0,0,0.05); 
     --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.1); 
     --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.1); 
+    
+    /* Dimensiones y Tipografía */
     --sidebar-width: 300px;
+    --font-family: 'Inter', sans-serif;
+    --radius-sm: 6px; 
+    --radius-md: 8px; 
+    --radius-lg: 12px;
 }
 
 * { box-sizing: border-box; }
 
 body { 
-    margin: 0; font-family: var(--font-family); color: var(--text-main); 
-    background-color: var(--bg-body); min-height: 100vh; font-size: 14px; line-height: 1.5; 
+    margin: 0; 
+    font-family: var(--font-family); 
+    color: var(--text-main); 
+    background-color: var(--bg-body); 
+    min-height: 100vh; 
+    font-size: 14px; 
+    line-height: 1.5; 
 }
 
-/* --- 2. LAYOUT --- */
+/* --------------------------------------------------------------------------
+   2. LAYOUT PRINCIPAL
+   -------------------------------------------------------------------------- */
+
+/* Barra Lateral Izquierda */
 .sidebar {
-    width: var(--sidebar-width); background-color: var(--bg-sidebar); border-right: 1px solid var(--border);
-    height: 100vh; position: fixed; top: 0; left: 0; z-index: 50; overflow-y: auto; padding: 1.5rem;
-    display: flex; flex-direction: column; box-shadow: var(--shadow-sm);
+    width: var(--sidebar-width); 
+    background-color: var(--bg-sidebar); 
+    border-right: 1px solid var(--border);
+    height: 100vh; 
+    position: fixed; 
+    top: 0; 
+    left: 0; 
+    z-index: 50; 
+    overflow-y: auto; /* Scroll si el contenido es muy largo */
+    padding: 1.5rem;
+    display: flex; 
+    flex-direction: column; 
+    box-shadow: var(--shadow-sm);
 }
+
+/* Estilizado fino del scroll de la sidebar */
+.sidebar::-webkit-scrollbar { width: 6px; }
+.sidebar::-webkit-scrollbar-thumb { background-color: rgba(0,0,0,0.1); border-radius: 3px; }
+
 .sidebar h2 { font-size: 1.25rem; font-weight: 700; color: var(--text-main); margin: 0 0 1.5rem 0; }
 .sidebar h3 { font-size: 0.75rem; text-transform: uppercase; color: var(--text-secondary); font-weight: 600; margin: 1.5rem 0 0.75rem 0; }
 
+/* Contenedor Principal Derecho */
 .content { 
     margin-left: var(--sidebar-width); 
     padding: 2rem; 
@@ -50,60 +108,143 @@ body {
 .content-header-sutil h1 { font-size: 1.875rem; font-weight: 700; color: var(--text-main); margin: 0; }
 .content-header-sutil span { color: var(--text-secondary); font-size: 1rem; }
 
-/* --- 3. COMPONENTES FORMULARIO --- */
+/* --------------------------------------------------------------------------
+   3. COMPONENTES UI (Botones, Inputs, Cards)
+   -------------------------------------------------------------------------- */
+
+/* -- Inputs Generales -- */
 input[type="text"], input[type="file"], select, textarea {
     width: 100%; padding: 0.6rem; border: 1px solid var(--border); border-radius: var(--radius-md);
     font-size: 0.9rem; font-family: var(--font-family); color: var(--text-main); background-color: var(--bg-surface);
 }
 input:focus, select:focus, textarea:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--border-focus); }
 
-/* --- 4. BOTONES --- */
+/* -- Botones Base -- */
 button, .btn-small-link {
     display: inline-flex; align-items: center; justify-content: center; padding: 0.6rem 1rem;
     border-radius: var(--radius-md); font-weight: 500; font-size: 0.9rem; cursor: pointer;
     border: 1px solid transparent; text-decoration: none; gap: 0.5rem; transition: all 0.2s;
 }
+
+/* Botones Primarios (Azules) */
 .btn-azul-secundario, #btn-add-filter { background-color: var(--primary); color: white; border: 1px solid var(--primary); }
 .btn-azul-secundario:hover, #btn-add-filter:hover { background-color: var(--primary-hover); }
 
+/* Botones Secundarios (Gris/Link) */
 .btn-small-link { background-color: var(--bg-surface); color: var(--text-secondary); border: 1px solid var(--border); width: 100%; justify-content: flex-start; }
 .btn-small-link:hover { background-color: var(--bg-body); color: var(--text-main); border-color: #D1D5DB; }
 .btn-small-link i { width: 20px; text-align: center; }
 
-.column-toggle-buttons { display: flex; gap: 0.5rem; margin-bottom: 0.5rem; }
-.column-toggle-buttons .btn-small-link { width: auto; flex: 1; justify-content: center; }
-
+/* Botones de Acción (Verde/Rojo) */
 .btn-verde-secundario { background-color: var(--success-light); color: var(--success); }
 .btn-verde-secundario:hover { background-color: #D1FAE5; color: #047857; }
+
 .btn-rojo-secundario { background-color: var(--danger-light); color: var(--danger); }
 .btn-rojo-secundario:hover { background-color: #FEE2E2; color: #B91C1C; }
 
-/* --- 5. UPLOADER & KPI --- */
-.drag-drop-area { border: 2px dashed var(--border); border-radius: var(--radius-md); padding: 2rem 1rem; text-align: center; background-color: #FAFAFA; }
-.drag-drop-area:hover { border-color: var(--primary); background-color: var(--primary-light); }
+/* Botones Icono Pequeños */
+.icon-button { width: 32px; height: 32px; padding: 0; border-radius: var(--radius-sm); border: 1px solid var(--border); color: var(--text-secondary); background: var(--bg-surface); }
+.icon-button:hover { background: var(--bg-body); color: var(--primary); border-color: var(--primary); }
 
-.resumen-busqueda { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1.5rem; margin-bottom: 1.5rem; flex-shrink: 0; }
-.resumen-card-item { background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1.5rem; display: flex; align-items: center; gap: 1rem; box-shadow: var(--shadow-sm); }
-.card-icon { width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; }
-.card-blue .card-icon { background: var(--primary-light); color: var(--primary); }
-.card-green .card-icon { background: var(--success-light); color: var(--success); }
-.card-purple .card-icon { background: #F3E8FF; color: #9333EA; }
-.card-data { display: flex; flex-direction: column; }
-.card-titulo { font-size: 0.85rem; color: var(--text-secondary); font-weight: 500; text-transform: uppercase; }
-.card-valor { font-size: 1.5rem; font-weight: 700; color: var(--text-main); }
+/* Grupo de botones columna */
+.column-toggle-buttons { display: flex; gap: 0.5rem; margin-bottom: 0.5rem; }
+.column-toggle-buttons .btn-small-link { width: auto; flex: 1; justify-content: center; }
 
-/* --- 6. TABLA Y VISTAS --- */
-.view-selector-container { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; padding: 0 0.25rem; flex-shrink: 0; }
-.view-selector-buttons { background-color: #E5E7EB; padding: 4px; border-radius: var(--radius-md); display: inline-flex; }
-.view-button { background: transparent; border: none; color: var(--text-secondary); padding: 0.5rem 1rem; border-radius: 4px; }
-.view-button.active { background-color: var(--bg-surface); color: var(--text-main); font-weight: 600; shadow: var(--shadow-sm); }
-
+/* -- Cards Generales -- */
 .content-card {
     background-color: var(--bg-surface); border-radius: var(--radius-lg); border: 1px solid var(--border);
     box-shadow: var(--shadow-sm); padding: 1.5rem; display: flex; flex-direction: column;
     min-height: 0; 
 }
 
+/* --------------------------------------------------------------------------
+   4. MÓDULOS ESPECÍFICOS
+   -------------------------------------------------------------------------- */
+
+/* -- Uploader (Carga de Archivos) -- */
+.file-uploader-container { margin-bottom: 1rem; }
+.drag-drop-area { 
+    display: block; /* Vital: Hace que la etiqueta se comporte como una caja sólida */
+    width: 100%;    /* Asegura que ocupe todo el ancho disponible del contenedor */
+    border: 2px dashed var(--border); 
+    border-radius: var(--radius-md); 
+    padding: 2rem 1rem; text-align: center; 
+    background-color: #FAFAFA; 
+    cursor: pointer; transition: border 0.2s;
+ }
+
+.drag-drop-area:hover { 
+    border-color: var(--primary); 
+    background-color: var(--primary-light); 
+}
+
+.file-list-item {
+    display: flex; align-items: center; padding: 10px;
+    background-color: #f7fafc; border-radius: 8px; border: 1px solid #e2e8f0; margin-top: 10px;
+}
+.file-icon {
+    width: 40px; height: 40px; min-width: 40px; /* Fix imagen gigante */
+    margin-right: 15px; color: #4a5568;
+}
+
+.file-details {
+    display: flex;
+    flex-direction: column; /* Apila nombre arriba y peso abajo */
+    justify-content: center;
+    overflow: hidden; /* Evita que nombres largos rompan el layout */
+}
+.file-name {
+    font-weight: 500;
+    color: var(--text-main);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.file-size {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+/* -- Selector de Columnas (Sidebar) -- */
+#column-selector-wrapper {
+    max-height: 200px; /* Fix altura excesiva */
+    min-height: 150px;
+    overflow-y: auto;  /* Fix scroll */
+    border: 1px solid var(--border); background-color: #FAFAFA;
+    padding: 10px; border-radius: var(--radius-md); margin-bottom: 15px;
+}
+
+.column-selector-item {
+    display: flex;
+    align-items: center;
+    padding: 4px 0; /* Espacio vertical entre items */
+}
+.column-selector-item label {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    font-size: 0.9rem;
+    color: var(--text-main);
+    margin: 0; /* Reset de margen por defecto */
+}
+.column-selector-item input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    margin-right: 8px; /* Espacio entre checkbox y texto */
+    cursor: pointer;
+    accent-color: var(--primary); /* Color azul del sistema */
+}
+
+#column-selector-wrapper::-webkit-scrollbar { width: 4px; }
+#column-selector-wrapper::-webkit-scrollbar-thumb { background-color: #CBD5E0; border-radius: 2px; }
+
+/* -- KPIs (Tarjetas de Resumen) -- */
+.resumen-busqueda { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1.5rem; margin-bottom: 1.5rem; flex-shrink: 0; }
+.resumen-card-item { background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1.5rem; display: flex; align-items: center; gap: 1rem; box-shadow: var(--shadow-sm); }
+.card-titulo { font-size: 0.85rem; color: var(--text-secondary); font-weight: 500; text-transform: uppercase; }
+.card-valor { font-size: 1.5rem; font-weight: 700; color: var(--text-main); }
+
+/* -- Controles de Tabla y Filtros -- */
 .table-controls {
     background-color: var(--bg-body); padding: 0.75rem; border-radius: var(--radius-md);
     display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; margin-bottom: 1rem; border: 1px solid var(--border); flex-shrink: 0;
@@ -115,31 +256,35 @@ button, .btn-small-link {
 .search-wrapper input { padding-left: 2.25rem; border-radius: 20px; width: 250px; }
 .search-wrapper .search-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-placeholder); width: 16px; }
 
-/* TABULATOR (Estructura ESTABLE) */
+.view-selector-container { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; padding: 0 0.25rem; flex-shrink: 0; }
+.view-selector-buttons { background-color: #E5E7EB; padding: 4px; border-radius: var(--radius-md); display: inline-flex; }
+.view-button { background: transparent; border: none; color: var(--text-secondary); padding: 0.5rem 1rem; border-radius: 4px; }
+.view-button.active { background-color: var(--bg-surface); color: var(--text-main); font-weight: 600; shadow: var(--shadow-sm); }
+
+/* -- Tabulator (La Tabla) -- */
 .table-container-flotante {
     border: 1px solid var(--border); border-radius: var(--radius-md);
     background-color: var(--bg-surface);
     width: 100%; 
-    height: 65vh; 
+    height: 65vh; /* Altura fija vital para rendimiento */
     overflow: hidden;
 }
 
-/* TABULATOR (Estilos Override) */
+/* Overrides de Tabulator */
 .tabulator-header { background-color: #F9FAFB !important; border-bottom: 1px solid var(--border) !important; font-weight: 600; color: var(--text-secondary); }
 .tabulator-row { border-bottom: 1px solid #F3F4F6 !important; background-color: var(--bg-surface) !important; }
 .tabulator-row:hover { background-color: #F9FAFB !important; }
 .tabulator-row.tabulator-selected { background-color: #EFF6FF !important; }
 .tabulator-cell { border-right: none !important; color: var(--text-main); padding: 10px !important; }
 
-/* Prioridades */
+/* Colores Semánticos para Prioridades en Tabla */
 .tabulator-row.priority-alta { border-left: 4px solid var(--danger) !important; background-color: #FFF5F5 !important; }
 .tabulator-row.priority-media { border-left: 4px solid var(--warning) !important; }
 .tabulator-row.priority-baja { border-left: 4px solid var(--success) !important; }
 
-.icon-button { width: 32px; height: 32px; padding: 0; border-radius: var(--radius-sm); border: 1px solid var(--border); color: var(--text-secondary); background: var(--bg-surface); }
-.icon-button:hover { background: var(--bg-body); color: var(--primary); border-color: var(--primary); }
-
-/* --- 7. MODALES (CON FIX PARA LOGIN) --- */
+/* --------------------------------------------------------------------------
+   5. MODALES (VENTANAS EMERGENTES)
+   -------------------------------------------------------------------------- */
 #modal-overlay { 
     position: fixed; top: 0; left: 0; width: 100%; height: 100%;
     background-color: rgba(17, 24, 39, 0.6); backdrop-filter: blur(4px);
@@ -147,77 +292,168 @@ button, .btn-small-link {
 }
 #modal-overlay[style*="display: flex"] { display: flex !important; }
 
-/* ¡AQUÍ ESTÁ LA MAGIA! Agregado #login-modal a la lista */
-#bulk-edit-modal, #manage-lists-modal, #priority-rules-modal, #find-replace-modal, #login-modal {
-    background-color: var(--bg-surface); border: 1px solid var(--border); 
-    box-shadow: var(--shadow-lg); border-radius: var(--radius-lg); 
-    overflow: hidden; max-height: 90vh; display: flex; flex-direction: column;
-    min-width: 400px; max-width: 600px;
+/* Estilo Base para Modales Grandes */
+#bulk-edit-modal, #manage-lists-modal, #priority-rules-modal, #find-replace-modal {
+    background-color: var(--bg-surface); 
+    border: 1px solid var(--border); 
+    box-shadow: var(--shadow-lg); 
+    border-radius: var(--radius-lg); 
+    display: flex; 
+    flex-direction: column;
+    
+    /* Fix Dimensiones y Responsive */
+    width: 800px; 
+    max-width: 90vw; 
+    max-height: 85vh; 
+    overflow-y: auto; /* Scroll interno activado */
 }
 
-#bulk-edit-modal h3, #manage-lists-modal h3, #priority-rules-modal h3, #find-replace-modal h3, #login-modal h3 {
-    background-color: #F9FAFB; padding: 1rem 1.5rem; margin: 0; border-bottom: 1px solid var(--border); font-size: 1.1rem; color: var(--text-main);
+/* Corrección para el contenedor de lista de reglas */
+#rules-list-container {
+    /* Estilos visuales */
+    background: #f9fafb;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 0.5rem;
+    
+    /* --- CORRECCIÓN DE SCROLL Y ALTURA --- */
+    min-height: 250px;  /* Altura mínima garantizada */
+    height: auto;       /* Crece todo lo que necesite */
+    overflow: visible;  /* IMPORTANTE: No corta el contenido ni crea scroll interno */
+    flex-shrink: 0;     /* IMPORTANTE: Evita que el modal lo aplaste si falta espacio */
+    /* ------------------------------------- */
+    
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
 }
 
-/* Estilos específicos para el cuerpo del login si es necesario */
-#login-modal { padding-bottom: 2rem; } 
-#login-modal h3 { background: none; border: none; margin-top: 1rem; font-size: 1.5rem; color: var(--primary); }
+/* Cabecera Sticky */
+#bulk-edit-modal h3, #manage-lists-modal h3, #priority-rules-modal h3, #find-replace-modal h3 {
+    background-color: #F9FAFB; padding: 1rem 1.5rem; margin: 0; 
+    border-bottom: 1px solid var(--border); font-size: 1.1rem; color: var(--text-main);
+    position: sticky; top: 0; z-index: 10;
+}
 
-.modal-buttons { padding: 1rem 1.5rem; background-color: #F9FAFB; border-top: 1px solid var(--border); margin: 0; text-align: right; display: flex; justify-content: flex-end; gap: 1rem; }
+/* Footer Sticky (Botones) */
+.modal-buttons { 
+    padding: 1rem 1.5rem; background-color: #F9FAFB; border-top: 1px solid var(--border); 
+    margin: 0; margin-top: auto; display: flex; justify-content: flex-end; gap: 1rem; 
+    position: sticky; bottom: 0; z-index: 10;
+}
 
+.modal-header-sticky {
+    display: flex;              /* Permite alinear elementos en fila */
+    justify-content: space-between; /* Empuja el título a la izq y el botón a la derecha */
+    align-items: center;        /* Centra verticalmente */
+    
+    background-color: #F9FAFB; 
+    padding: 1rem 1.5rem; 
+    border-bottom: 1px solid var(--border);
+    
+    /* Configuración Sticky para que se quede pegado arriba */
+    position: sticky; 
+    top: 0; 
+    z-index: 20;
+}
+
+.modal-header-sticky h3 {
+    margin: 0; 
+    font-size: 1.1rem; 
+    color: var(--text-main);
+}
+
+.btn-close-x {
+    background: transparent;
+    border: none;
+    font-size: 1.2rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 4px;
+    transition: background 0.2s, color 0.2s;
+}
+
+.btn-close-x:hover {
+    background-color: #FEE2E2; /* Fondo rojo suave al pasar el mouse */
+    color: var(--danger);      /* Icono rojo */
+}
+
+/* Componentes Internos de Modal */
 .modal-form-group { margin-bottom: 1rem; padding: 0 1.5rem; }
 .modal-form-group:first-of-type { margin-top: 1.5rem; }
 .modal-form-group label { display: block; margin-bottom: 0.5rem; font-weight: 500; color: var(--text-main); font-size: 0.9rem; }
-
 .modal-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; padding: 0 1.5rem; margin-bottom: 1rem; }
-.modal-grid-2 .modal-form-group { padding: 0; margin: 0; }
-
 .input-help-text { display: block; font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.5rem; line-height: 1.4; }
 
 .values-display-box { 
     background: #f9fafb; border: 1px solid var(--border); border-radius: var(--radius-md); 
     padding: 0.5rem; min-height: 60px; max-height: 150px; overflow-y: auto; font-size: 0.85rem; color: var(--text-secondary);
 }
-
 .rule-item { 
     display: flex; justify-content: space-between; align-items: center; 
     background: white; border: 1px solid var(--border); padding: 0.5rem 0.8rem; 
     margin-bottom: 0.5rem; border-radius: var(--radius-sm); 
 }
-.rule-item:last-child { margin-bottom: 0; }
-.btn-delete-rule {
-    background: transparent; border: none; color: var(--text-placeholder); cursor: pointer; font-size: 1.1rem; padding: 4px; transition: color 0.2s;
-}
+.btn-delete-rule { background: transparent; border: none; color: var(--text-placeholder); cursor: pointer; font-size: 1.1rem; padding: 4px; }
 .btn-delete-rule:hover { color: var(--danger); }
 
-/* --- 8. RESPONSIVE --- */
-@media (max-width: 1024px) { .sidebar { width: 260px; } .content { margin-left: 260px; } }
-@media (max-width: 768px) { .sidebar { display: none; } .content { margin-left: 0; padding: 1rem; } }
-
-/* --- 9. FULLSCREEN MODE --- */
+/* --------------------------------------------------------------------------
+   6. ESTADOS (FULLSCREEN)
+   -------------------------------------------------------------------------- */
 body.fullscreen-mode .sidebar { display: none !important; }
 body.fullscreen-mode .content {
-    margin-left: 0 !important; padding: 1rem !important; width: 100vw !important;
-    max-width: none !important; position: static !important; height: auto !important;
-    min-height: 100vh; z-index: auto; overflow: visible !important; 
+    margin-left: 0 !important; padding: 1rem !important; width: 100vw !important; max-width: none !important;
+    position: static !important; height: auto !important; min-height: 100vh; z-index: auto; overflow: visible !important; 
 }
 .content-card.in-fullscreen { border: none !important; box-shadow: none !important; margin: 0 !important; padding: 0 !important; height: auto !important; min-height: 0; }
-body.fullscreen-mode .content-header-sutil, body.fullscreen-mode .resumen-busqueda { display: none !important; }
+body.fullscreen-mode .content-header-sutil, body.fullscreen-mode .resumen-busqueda, body.fullscreen-mode .content-card .card-header { display: none !important; }
 body.fullscreen-mode .view-selector-container { display: flex !important; justify-content: center; margin-top: 0 !important; margin-bottom: 1rem !important; padding-left: 0 !important; }
 body.fullscreen-mode .content-card .table-controls { display: flex !important; }
 body.fullscreen-mode .table-container-flotante { height: 85vh !important; }
 
-/* --- 10. ICONOS Y SELECTORES --- */
-.file-list-item { display: flex; align-items: center; padding: 0.8rem; background: #fff; border: 1px solid var(--border); border-radius: 8px; margin-top: 1rem; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
-.file-list-item .file-icon, .file-list-item svg { width: 32px !important; height: 32px !important; min-width: 32px; color: var(--primary); margin-right: 1rem; display: block; }
-.file-details { display: flex; flex-direction: column; overflow: hidden; }
-.file-name { font-weight: 600; font-size: 0.9rem; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.file-size { font-size: 0.75rem; color: var(--text-secondary); }
-
-#column-selector-wrapper {
-    max-height: 250px; overflow-y: auto; display: block; width: 100%;
-    border: 1px solid var(--border); border-radius: var(--radius-md);
-    padding: 0.8rem; background-color: var(--bg-surface);
-    margin-top: 0.5rem; margin-bottom: 1.5rem; box-shadow: inset 0 1px 3px rgba(0,0,0,0.05); flex-shrink: 0;
+/* --- ESTILOS NUEVOS: Etiquetas de Autocompletado --- */
+.value-chip {
+    display: inline-flex;
+    align-items: center;
+    background-color: #e5e7eb; /* Gris suave */
+    border-radius: 16px;       /* Bordes muy redondos */
+    padding: 4px 12px;
+    margin: 4px;
+    font-size: 0.85rem;
+    color: var(--text-main);
+    border: 1px solid #d1d5db;
+    transition: background 0.2s;
 }
-.column-selector-item { margin-bottom: 6px; display: flex; align-items: center; }
+
+.value-chip:hover {
+    background-color: #d1d5db;
+}
+
+.value-chip .remove-icon {
+    margin-left: 8px;
+    cursor: pointer;
+    color: #6b7280;
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    padding: 2px;
+    border-radius: 50%;
+}
+
+.value-chip .remove-icon:hover {
+    color: var(--danger); /* Rojo al pasar el mouse */
+    background-color: rgba(220, 38, 38, 0.1);
+}
+
+/* --------------------------------------------------------------------------
+   7. RESPONSIVE (MEDIA QUERIES)
+   -------------------------------------------------------------------------- */
+@media (max-width: 1024px) { 
+    .sidebar { width: 260px; } 
+    .content { margin-left: 260px; } 
+}
+@media (max-width: 768px) { 
+    .sidebar { display: none; } 
+    .content { margin-left: 0; padding: 1rem; } 
+}

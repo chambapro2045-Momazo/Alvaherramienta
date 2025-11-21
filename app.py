@@ -1,5 +1,5 @@
 """
-app.py (Versión 6.0 - Con Importación de Listas)
+app.py (Versión 7.0 - Vistas con Lógica de Negocio)
 --------------------------------------------------------------------------------
 Controlador principal de la aplicación Flask.
 Coordina la interacción entre el Frontend (Tabulator) y los Módulos de Lógica.
@@ -24,16 +24,16 @@ from flask_session import Session
 from modules.loader import cargar_datos
 from modules.filters import aplicar_filtros_dinamicos
 from modules.translator import get_text, LANGUAGES
-# ¡ATENCIÓN! Se añadió cargar_json aquí abajo:
 from modules.json_manager import guardar_json, cargar_json, USER_LISTS_FILE
 from modules.autocomplete import get_autocomplete_options
+# ATENCIÓN: Se añadió replace_all_rules a las importaciones
 from modules.priority_manager import (
     save_rule, load_rules, delete_rule, apply_priority_rules,
-    load_settings, save_settings, toggle_rule
+    load_settings, save_settings, toggle_rule, replace_all_rules
 )
 
 # --- Constantes ---
-UNDO_STACK_LIMIT = 25
+UNDO_STACK_LIMIT = 15
 UPLOAD_FOLDER = 'temp_uploads'
 
 # --- Configuración Flask ---
@@ -617,7 +617,6 @@ def api_save_lists():
     guardar_json(USER_LISTS_FILE, request.json)
     return jsonify({"status": "success"})
 
-# --- NUEVA RUTA DE IMPORTACIÓN ---
 @app.route('/api/import_autocomplete_values', methods=['POST'])
 def api_import_autocomplete():
     try:
@@ -646,13 +645,38 @@ def api_import_autocomplete():
         current_lists[col_name] = sorted(list(existing_vals))
         guardar_json(USER_LISTS_FILE, current_lists)
         
-        # Devolver opciones actualizadas
         new_options = get_autocomplete_options(df)
         
         return jsonify({
             "status": "success", 
             "message": f"Importados {len(nuevos_valores)} valores.",
             "autocomplete_options": new_options
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# --- NUEVA RUTA: IMPORTAR REGLAS MASIVAS (PARA VISTAS) ---
+@app.route('/api/priority_rules/import_view', methods=['POST'])
+def api_import_view_rules():
+    try:
+        data = request.json
+        rules = data.get('rules', [])
+        settings = data.get('settings', {})
+        
+        # Sobrescribir reglas actuales con las de la vista
+        replace_all_rules(rules, settings)
+        
+        # Recalcular prioridades si hay datos cargados
+        df_result = None
+        if session.get('df_staging'):
+            df = _get_df_from_session_as_df()
+            df = _recalculate_priorities(df)
+            session['df_staging'] = df.to_dict('records')
+            df_result = df
+            
+        return jsonify({
+            "status": "success", 
+            "resumen": _calculate_kpis(df_result) if df_result is not None else None
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500

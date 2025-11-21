@@ -2,7 +2,7 @@
  * ============================================================================
  * SCRIPT.JS - CONTROLADOR PRINCIPAL DEL CLIENTE
  * ============================================================================
- * VERSIÓN: 6.6 (Fix: Selección Múltiple + Edición Asíncrona)
+ * VERSIÓN: 7.0 (Vistas Inteligentes: Incluyen Reglas de Negocio)
  */
 
 // ============================================================================
@@ -1150,18 +1150,33 @@ async function handleDeleteRule(col, val) {
 }
 
 // ============================================================================
-// 9. PERSISTENCIA DE VISTAS
+// 9. PERSISTENCIA DE VISTAS (INCLUYENDO REGLAS)
 // ============================================================================
 
-function handleSaveView() {
+async function handleSaveView() {
     if (!currentFileId) return alert("No hay datos.");
+    
+    // 1. Obtener las reglas actuales del servidor
+    let currentRulesData = { rules: [], settings: {} };
+    try {
+        const res = await fetch('/api/priority_rules/get');
+        if (res.ok) currentRulesData = await res.json();
+    } catch (e) { console.error("Error fetching rules for save:", e); }
+
     const config = {
-        viewType: currentView, activeFilters: activeFilters, visibleColumns: columnasVisibles,
-        groupByColumn: document.getElementById('select-columna-agrupar')?.value || ""
+        viewType: currentView, 
+        activeFilters: activeFilters, 
+        visibleColumns: columnasVisibles,
+        groupByColumn: document.getElementById('select-columna-agrupar')?.value || "",
+        // Incluimos las reglas en el archivo guardado
+        priorityRules: currentRulesData.rules,
+        prioritySettings: currentRulesData.settings
     };
+    
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([JSON.stringify(config, null, 2)], { type: "application/json" }));
-    a.download = 'vista_config.json'; document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    a.download = 'vista_config.json'; 
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
 }
 
 function handleLoadView(event) {
@@ -1172,6 +1187,8 @@ function handleLoadView(event) {
     reader.onload = async (e) => {
         try {
             const c = JSON.parse(e.target.result);
+            
+            // Restaurar UI básica
             activeFilters = c.activeFilters || [];
             columnasVisibles = (c.visibleColumns || todasLasColumnas).filter(col => todasLasColumnas.includes(col));
             document.querySelectorAll('#column-selector-wrapper input').forEach(cb => cb.checked = columnasVisibles.includes(cb.value));
@@ -1180,8 +1197,31 @@ function handleLoadView(event) {
                 const sel = document.getElementById('select-columna-agrupar');
                 if (sel && sel.querySelector(`option[value="${c.groupByColumn}"]`)) sel.value = c.groupByColumn;
             }
+
+            // --- RESTAURAR REGLAS SI EXISTEN ---
+            if (c.priorityRules || c.prioritySettings) {
+                if(confirm("Esta vista contiene reglas de prioridad. ¿Desea sobrescribir las reglas actuales con las del archivo?")) {
+                    try {
+                        const res = await fetch('/api/priority_rules/import_view', {
+                            method: 'POST', 
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ 
+                                rules: c.priorityRules || [], 
+                                settings: c.prioritySettings || {} 
+                            })
+                        });
+                        const result = await res.json();
+                        if (result.resumen) updateResumenCard(result.resumen);
+                        alert("Vista y reglas restauradas correctamente.");
+                    } catch(err) { alert("Error restaurando reglas: " + err.message); }
+                }
+            } else {
+                alert("Vista restaurada.");
+            }
+
             toggleView(c.viewType || 'detailed', true);
-        } catch (e) { alert("JSON inválido."); }
+            
+        } catch (e) { alert("JSON inválido o error al cargar: " + e.message); }
     };
     reader.readAsText(file); event.target.value = null;
 }

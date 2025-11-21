@@ -173,6 +173,27 @@ def delete_rule(column: str, value: str) -> bool:
     return False
 
 
+def replace_all_rules(new_rules: list, new_settings: dict) -> bool:
+    """
+    Sobrescribe TODAS las reglas y configuraciones actuales con las nuevas proporcionadas.
+    Útil para importar vistas completas.
+
+    Args:
+        new_rules (list): Lista completa de reglas a guardar.
+        new_settings (dict): Diccionario de configuración global.
+
+    Returns:
+        bool: True si se guardó correctamente.
+    """
+    # Construimos la estructura completa del archivo.
+    data = {
+        "rules": new_rules,
+        "settings": new_settings
+    }
+    # Guardamos directamente, sobrescribiendo lo anterior.
+    return guardar_json(RULES_FILE, data)
+
+
 def apply_priority_rules(df: pd.DataFrame) -> pd.DataFrame:
     """
     Aplica las reglas de prioridad personalizadas al DataFrame de forma vectorizada.

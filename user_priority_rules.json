@@ -1,22 +1,22 @@
 {
     "rules": [
         {
+            "active": true,
             "column": "Assignee",
-            "value": "daniela.vasquez01@grupobimbo.com",
-            "priority": "Alta",
-            "reason": "Proveedores importantes asignados",
-            "active": false
-        },
-        {
-            "column": "Assignee",
-            "value": "alvaro.moncada@grupobimbo.com",
             "priority": "Alta",
             "reason": "Asignados importantes proveedores",
-            "active": true
+            "value": "alvaro.moncada@grupobimbo.com"
+        },
+        {
+            "active": true,
+            "column": "Assignee",
+            "priority": "Alta",
+            "reason": "Porque sí",
+            "value": "daniela.vasquez01@grupobimbo.com"
         }
     ],
     "settings": {
-        "enable_scf_intercompany": true,
-        "enable_age_sort": true
+        "enable_age_sort": false,
+        "enable_scf_intercompany": true
     }
 }
